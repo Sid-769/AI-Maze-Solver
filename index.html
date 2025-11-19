@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Maze Solver</title>
+    <style>
+        body { 
+            background: #202020; 
+            color: white; 
+            font-family: Arial; 
+            text-align: center; 
+        }
+        canvas { 
+            border: 2px solid white; 
+            margin-top: 20px; 
+        }
+        button {
+            padding: 10px 18px;
+            background: #444;
+            color: white;
+            border: 1px solid #888;
+            font-size: 16px;
+            cursor: pointer;
+            margin: 10px 5px;
+        }
+    </style>
+</head>
+<body>
+
+<h1>Maze Solver</h1>
+
+<button onclick="generateMaze()">Generate Maze</button>
+<button onclick="solveMazeWithMdp()">Solve Maze With MDP</button>
+
+<br>
+
+<canvas id="mazeCanvas" width=600, height=600></canvas>
+
+<script src="main.js"></script>
+</body>
+</html>

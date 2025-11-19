@@ -174,7 +174,7 @@ class MazeMDP:
         path (list of tuples): ordered sequence of states visited from start to goal
         log (list of dicts): detailed info for each step including step number, state, action, next_state, and reward
     """
-    def follow_policy(self, policy, max_steps=1000):
+    def follow_policy(self, policy, max_steps=10000):
         path = [self.start]         
         log = []                     
         current_state = self.start
@@ -214,7 +214,7 @@ class MazeMDP:
     """
     Function to use, it ruuns value iteration, extracts policy, and follows the policy from start to goal.
     """
-    def mdp_solver(self, max_iters=1000, tol=1e-6, max_steps=1000):
+    def mdp_solver(self, max_iters=1000, tol=1e-6, max_steps=10000):
         V, policy = self.value_iteration(max_iters=max_iters, tol=tol)
         path, log = self.follow_policy(policy, max_steps=max_steps)
         return V, policy, path, log
