@@ -1,0 +1,33 @@
+# --- Python cache files ---
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+
+# --- Virtual environments ---
+venv/
+env/
+.venv/
+
+# --- OS-specific files ---
+.DS_Store
+Thumbs.db
+
+# --- Jupyter Notebook checkpoints ---
+.ipynb_checkpoints/
+
+# --- Python packaging ---
+build/
+dist/
+*.egg-info/
+
+# --- Logs ---
+*.log
+
+# --- IDE/editor settings ---
+.vscode/
+.idea/
+
+# --- Misc ---
+*.swp
+*.swo
