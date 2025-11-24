@@ -8,7 +8,7 @@ function drawMaze(grid, path) {
     const rows = grid.length;
     const cols = grid[0].length;
 
-    const maxCanvasSize = 800;
+    const maxCanvasSize = 1000;
     const cellSize = Math.floor(maxCanvasSize / Math.max(rows, cols));
 
     // Resize canvas exactly to fit the maze
