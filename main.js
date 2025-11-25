@@ -4,7 +4,7 @@ const ctx = canvas.getContext("2d");
 let CURRENT_GRID = [];
 let CURRENT_PATH = [];
 
-function drawMaze(grid, path) {
+function drawMaze(grid, path, color) {
     const rows = grid.length;
     const cols = grid[0].length;
 
@@ -44,7 +44,7 @@ function drawMaze(grid, path) {
         }
     }
 
-    ctx.fillStyle = "yellow";
+    ctx.fillStyle = color;
     for (const [r, c] of path) {
         ctx.fillRect(
             c * cellSize + pathMargin,
@@ -77,8 +77,24 @@ async function solveMazeWithMdp() {
         const res = await fetch("/api/maze/solveWithMdp");
         const data = await res.json();
         CURRENT_PATH = data.path;
-        drawMaze(CURRENT_GRID, CURRENT_PATH);
+        drawMaze(CURRENT_GRID, CURRENT_PATH, "yellow");
     } catch (err) {
         console.error("Error solving maze:", err);
     }
 }
+
+async function solveMazeWithAStar() {
+    try {
+        if (!CURRENT_GRID.length) {
+            alert("Please generate a maze first!");
+            return;
+        }
+        const res = await fetch("/api/maze/solveWithAStar");
+        const data = await res.json();
+        CURRENT_PATH = data.path || [];
+        drawMaze(CURRENT_GRID, CURRENT_PATH, "cyan");
+    } catch (err) {
+        console.error("Error solving maze with A*:", err);
+    }
+}
+

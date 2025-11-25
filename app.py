@@ -2,6 +2,7 @@ from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 from maze_generator import MazeGenerator
 from maze_mdp import MazeMDP
+from maze_aStar import MazeAStar
 import numpy as np
 
 app = FastAPI()
@@ -44,5 +45,15 @@ def solve_maze():
     return {
         "path": path_list
     }
+
+@app.get("/api/maze/solveWithAStar")
+def solve_maze_a_star():
+    if CURRENT_MAZE["grid"] is None:
+        return {"error": "No maze generated yet."}
+
+    solver = MazeAStar(CURRENT_MAZE["grid"], CURRENT_MAZE["start"], CURRENT_MAZE["goal"])
+    path = solver.solve()
+    path_list = [list(pos) for pos in path]
+    return {"path": path_list}
 
 app.mount("/", StaticFiles(directory=".", html=True), name="frontend")
