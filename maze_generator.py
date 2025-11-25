@@ -4,7 +4,7 @@ import random
 
 """The class randomly generates a maze with a start, a goal(end), and random size"""
 class MazeGenerator:
-    def __init__(self, min_size=11, max_size=35):
+    def __init__(self, min_size=11, max_size=31):
         self.min_size = min_size
         self.max_size = max_size
         self.grid = None          # To store the maze in a 2D array (Grid)

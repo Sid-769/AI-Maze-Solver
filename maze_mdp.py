@@ -1,4 +1,5 @@
 import numpy as np
+import random
 
 """
 Generic MDP solver for any 2D maze. This only works with MazeGenerator 
@@ -15,16 +16,22 @@ class MazeMDP:
     """
     ACTIONS = {"U": (-1, 0), "D": (1, 0), "L": (0, -1), "R": (0, 1)}
 
-    """Constructor of MDP object to solve 2D maze grid"""
     def __init__(self, grid, start, goal, discount_factor=0.9, step_cost=-0.05, goal_reward=10.0):
-        self.grid = np.array(grid) # converting grid to numpy array - comes from maze_generator
-        self.num_rows, self.num_cols = self.grid.shape # Number of rows and columns in the maze
-        self.start = start # The tuple (row, column) of start - comes from maze_generator
-        self.goal = goal # The tuple (row, column) of goal (end state) - comes from maze_generator
-        self.discount_factor = discount_factor # factor for future rewards 
-        self.step_cost = step_cost # Each step costs -0.05
-        self.goal_reward = goal_reward # Reward for reaching the goal (+10)
-        self.states = self._extract_states()
+        """
+        Initialize the MDP with the maze grid and parameters.
+        """
+        self.grid = np.array(grid)                 # Convert grid to numpy array
+        self.num_rows, self.num_cols = self.grid.shape
+        self.start = tuple(start)                  # Start cell (row, col)
+        self.goal = tuple(goal)                    # Goal cell (row, col)
+        self.discount_factor = discount_factor     # Discount factor γ for future rewards
+        self.step_cost = step_cost                 # Penalty for each step
+        self.goal_reward = goal_reward             # Reward for reaching goal
+        self.states = self._extract_states()       # List of all valid states (non-wall)
+
+        # Stochastic action probabilities
+        self.p_success = 0.8                       # Probability the intended action succeeds
+        self.p_slip = 0.1                          # Probability of slipping left or right
 
     """
     This function identifies all valid states in maze that isn't a wall,
@@ -65,66 +72,66 @@ class MazeMDP:
 
         # Get the row and column change for the chosen action
         delta_row, delta_col = self.ACTIONS[action]
+        new_row, new_col = state[0] + delta_row, state[1] + delta_col
 
-        # Next tuple is the current state + the tuple from where the chosen action lands
-        new_row = state[0] + delta_row
-        new_col = state[1] + delta_col
-
-        # Verify that the next position taking place is valid, stay if invalid move
+        # Stay in place if move is invalid
         if not self.is_valid(new_row, new_col):
             new_row, new_col = state
 
-        # Determine the reward for the new state
-        if (new_row, new_col) == self.goal:
-            reward = self.goal_reward
-        else:
-            reward = self.step_cost
+        # Assign reward
+        reward = self.goal_reward if (new_row, new_col) == self.goal else self.step_cost
         return (new_row, new_col), reward
 
+    """
+    Return a list of possible outcomes for an action from a state.
+    Each outcome is a tuple: (probability, next_state, reward)
+    Models stochasticity: success, slip-left, slip-right.
+    """
+    def get_action_outcomes(self, state, action):
+        left_of = {"U": "L", "L": "D", "D": "R", "R": "U"}
+        right_of = {"U": "R", "R": "D", "D": "L", "L": "U"}
+
+        outcomes = []
+        for prob, act in [(self.p_success, action), (self.p_slip, left_of[action]), (self.p_slip, right_of[action])]:
+            next_state, reward = self.transition(state, act)
+            outcomes.append((prob, next_state, reward))
+        return outcomes
 
     """
-    Performs value iteration to compute the optimal state values and policy.
-    Applies the Bellman optimality equation iteratively
+    Perform value iteration to compute optimal value function and policy.
     Returns:
-        V (The value function): Optimal value of each state
-        policy: Optimal action to take at each state
+        V: dict mapping state -> value
+        policy: dict mapping state -> optimal action
     """
     def value_iteration(self, max_iters=1000, tol=1e-6):
-        # All states initialize at (V = 0) - V is the value function 
-        V = {state: 0 for state in self.states}
 
-        # The loop approximates the optimal value function
+        V = {s: 0 for s in self.states}
+
         for _ in range(max_iters):
             delta = 0 # delta is to track the change in the maximum's state value from one iteration to the next.
             new_V = V.copy() # stores the updated state values for this iteration.
 
-            # Looping through each state to update V values
-            for state in self.states:
-                # Skipping goal state 
-                if state == self.goal:
-                    new_V[state] = self.goal_reward
+            for s in self.states:
+                # Skipping goal state
+                if s == self.goal:
+                    new_V[s] = self.goal_reward
                     continue
 
+                max_val = float("-inf")
                 # Bellman function update: V(s) = max_a [ R(s,a) + γ * V(s') ]
-                max_value = float('-inf') # start lower than everything, so first action sets a real value
-                for action in self.ACTIONS:
-                    next_state, reward = self.transition(state, action)
-                    value = reward + self.discount_factor * V[next_state]
-                    if value > max_value:
-                        max_value = value
+                for a in self.ACTIONS:
+                    expected_value = sum(prob * (reward + self.discount_factor * V[next_state])
+                                         for prob, next_state, reward in self.get_action_outcomes(s, a))
+                    if expected_value > max_val:
+                        max_val = expected_value
 
                 # Convergence check
                 # From one iteration to the next, we want the value of every state to be barely changing.
-                delta = max(delta, abs(max_value - V[state]))
+                delta = max(delta, abs(max_val - V[s]))
+                new_V[s] = max_val
 
-                # Update value for this state
-                new_V[state] = max_value
-
-            # Update the value function for all states in the iteration
             V = new_V
-
-            # Value of states converged, stop iterating.
-            if delta < tol:
+            if delta < tol:  # Stop if value function has converged
                 break
 
         # Extracting the optimal policy from the value function
@@ -138,83 +145,74 @@ class MazeMDP:
         π*(s) = argmax_a [ R(s,a) + γ * V(s') ]
     """
     def extract_policy(self, V):
-        policy = {}  # dictionary to store best action for each state
-
-        # Loop through all valid states 
-        for state in self.states:
-
-            # If the state is the goal, no action taken
-            if state == self.goal:
-                policy[state] = None
+        policy = {}
+        for s in self.states:
+            if s == self.goal:
+                policy[s] = None
                 continue
 
             best_action = None
-            best_value = float('-inf')  # start lower than any real value
-
-            # Evaluate all possible actions for a state 
-            for action in self.ACTIONS:
-                next_state, reward = self.transition(state, action)  # deterministic transition
-                value = reward + self.discount_factor * V[next_state]  # Bellman update
-
-                # If this action gives a higher value, update best_action
-                if value > best_value:
-                    best_value = value
-                    best_action = action
-
-            # Store the optimal action for this state
-            policy[state] = best_action
-
+            best_val = float("-inf")
+            for a in self.ACTIONS:
+                expected_value = sum(prob * (reward + self.discount_factor * V[next_state])
+                                     for prob, next_state, reward in self.get_action_outcomes(s, a))
+                if expected_value > best_val:
+                    best_val = expected_value
+                    best_action = a
+            policy[s] = best_action
         return policy
-
+    
     """
-    Follow a given policy (from the extract_policy function) from the start state to the goal state.
-    Tracks each move along with action taken, resulting state, and reward.
-    max_steps is to avoid infinite loops.
+    Follow a given policy from start to goal.
+    Implements stochastic action outcomes based on p_success and p_slip.
+    Includes loop prevention by random moves if stuck.
     Returns:
-        path (list of tuples): ordered sequence of states visited from start to goal
-        log (list of dicts): detailed info for each step including step number, state, action, next_state, and reward
+        path: list of states
     """
     def follow_policy(self, policy, max_steps=10000):
-        path = [self.start]         
-        log = []                     
+        path = [self.start]
         current_state = self.start
 
-        for step in range(max_steps):
-            # Stop if goal state is reached
+        for _ in range(max_steps):
             if current_state == self.goal:
                 break
 
-            # Look up the action to take based on the policy for the current state
-            action = policy[current_state]
-            if action is None:  # No action defined (goal state)
+            action = policy.get(current_state)
+            if action is None:
                 break
 
-            # Perform the deterministic transition
-            next_state, reward = self.transition(current_state, action)
+            # Apply stochastic transition
+            r = random.random()
+            if r < self.p_success:
+                chosen_action = action
+            elif r < self.p_success + self.p_slip:
+                left_of = {"U": "L", "L": "D", "D": "R", "R": "U"}
+                chosen_action = left_of[action]
+            else:
+                right_of = {"U": "R", "R": "D", "D": "L", "L": "U"}
+                chosen_action = right_of[action]
 
-            # Record the step details in the log
-            log.append({
-                "step": step,
-                "state": current_state,
-                "action": action,
-                "next_state": next_state,
-                "reward": reward
-            })
+            next_state, _ = self.transition(current_state, chosen_action)
 
-            # Stop if the agent is stuck in the same state
+            # If stuck, pick a random valid neighbor to escape
             if next_state == current_state:
-                break
+                neighbors = [s for s, _ in [self.transition(current_state, a) for a in self.ACTIONS] if s != current_state]
+                if neighbors:
+                    next_state = random.choice(neighbors)
 
-            # Append the next state to the path and update current_state
             path.append(next_state)
             current_state = next_state
 
-        return path, log
-    
+        return path
+
     """
-    Function to use, it ruuns value iteration, extracts policy, and follows the policy from start to goal.
+    Solve the MDP: compute value function, extract policy, and follow policy.
+    Returns:
+        V: value function
+        policy: optimal policy
+        path: trajectory from start to goal
     """
     def mdp_solver(self, max_iters=1000, tol=1e-6, max_steps=10000):
-        V, policy = self.value_iteration(max_iters=max_iters, tol=tol)
-        path, log = self.follow_policy(policy, max_steps=max_steps)
-        return V, policy, path, log
+        V, policy = self.value_iteration(max_iters, tol)
+        path = self.follow_policy(policy, max_steps)
+        return V, policy, path
