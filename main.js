@@ -4,6 +4,7 @@ const ctx = canvas.getContext("2d");
 let CURRENT_GRID = [];
 let CURRENT_PATH = [];
 let CURRENT_STEPS = [];
+let animationId = 0; //increment to cancel the previous animation
 
 function drawMaze(grid) {
     const rows = grid.length;
@@ -32,8 +33,9 @@ function drawMaze(grid) {
 }
 
 // Animate cells being explored
-async function animateSteps(steps, color, delay=30) {
+async function animateSteps(steps, color, delay=30, myId) {
     const rows = CURRENT_GRID.length;
+    if(!rows) return; //safety
     const cols = CURRENT_GRID[0].length;
     const maxCanvasSize = 1000;
     const cellSize = Math.floor(maxCanvasSize / Math.max(rows, cols));
@@ -41,6 +43,9 @@ async function animateSteps(steps, color, delay=30) {
     const pathSize = Math.max(1, cellSize - 2*pathMargin);
 
     for (const [r, c] of steps) {
+        //if a new animation starts stops this one
+        if (myId !== animationId) return;
+
         ctx.fillStyle = color;
         ctx.fillRect(c*cellSize + pathMargin, r*cellSize + pathMargin, pathSize, pathSize);
         await new Promise(resolve => setTimeout(resolve, delay));
@@ -48,8 +53,8 @@ async function animateSteps(steps, color, delay=30) {
 }
 
 // Animate final path
-async function animatePath(path, color="blue", delay=50) {
-    await animateSteps(path, color, delay);
+async function animatePath(path, color="blue", delay=50, myId) {
+    await animateSteps(path, color, delay, myId);
 }
 
 // --- API Calls ---
@@ -67,9 +72,14 @@ async function solveAndAnimateAStar() {
     CURRENT_PATH = data.path;
     const steps = data.steps;
 
-    drawMaze(CURRENT_GRID);
-    await animateSteps(steps, "cyan", 20);
-    await animatePath(CURRENT_PATH, "blue", 50);
+    // Start a new animation; invalidate old ones
+    animationId++;
+    const myId = animationId;
+
+
+    drawMaze(CURRENT_GRID); //clear previous drawing of maze    
+    await animateSteps(steps, "cyan", 20, myId);
+    await animatePath(CURRENT_PATH, "blue", 50, myId);
 }
 
 async function solveAndAnimateMDP() {
@@ -77,8 +87,11 @@ async function solveAndAnimateMDP() {
     const data = await res.json();
     CURRENT_PATH = data.path;
     const steps = data.steps;
+    
+    animationId++;
+    const myId = animationId;
 
     drawMaze(CURRENT_GRID);
-    await animateSteps(steps, "orange", 50);
-    await animatePath(CURRENT_PATH, "yellow", 50);
+    await animateSteps(steps, "orange", 50, myId);
+    await animatePath(CURRENT_PATH, "yellow", 50, myId);
 }
