@@ -21,14 +21,12 @@ class MazeAStar:
     Checks if a cell (r, c) is a valid position in the maze,
     a position is valid if it is within bounds and not a wall
     """
-
     def is_valid(self, r, c):
         in_bounds = 0 <= r < self.num_rows and 0 <= c < self.num_cols
         if not in_bounds:
             return False
-        #cell is valid if it is not a wall
+        # Cell is valid if it is not a wall
         return self.grid[r, c] != 1
-
 
     """
     Computes the Manhattan distance between two grid cells.
@@ -49,7 +47,6 @@ class MazeAStar:
     and finally reverses the list to get the path from start to goal.
     Returns the reconstructed path as a list of (row, col) tuples.
     """
-
     def reconstruct_path(self, came_from, current):
         path = [current]
         while current in came_from:
@@ -59,44 +56,43 @@ class MazeAStar:
         return path
 
     """
-    Implements the A* search algorithm to find the shortest path from start to goal.
-
-    Uses a priority queue to explore nodes with the lowest estimated total cost first. The algorithm maintains
-    g_score and f_score dictionaries to track the cost of reaching each node and the estimated total cost to the goal.
-    
-    Returns the path from start to goal as a list of (row, col) tuples if a path exists; otherwise, returns an empty list.
+    Internal A* method that performs the search.
+    Can optionally track steps for animation.
+    Returns:
+        path: the final optimal path
+        steps: the order in which nodes were explored (only if track_steps=True)
     """
-    def solve(self):
-        
-        start = self.start
-        goal = self.goal
+    def _astar(self, track_steps=False):
+        start, goal = self.start, self.goal
 
         open_set = []
-        heapq.heappush(open_set, (0, start))  # (f_score, node)
-
+        heapq.heappush(open_set, (0, start))
         came_from = {}
         g_score = {start: 0}
         f_score = {start: self.heuristic(start, goal)}
-
         open_set_hash = {start}
+
+        steps = []
 
         while open_set:
             _, current = heapq.heappop(open_set)
             open_set_hash.remove(current)
 
+            if track_steps:
+                steps.append(current)  # track exploration for animation
+
             if current == goal:
-                return self.reconstruct_path(came_from, current)
+                path = self.reconstruct_path(came_from, current)
+                return (path, steps) if track_steps else path
 
             cr, cc = current
             for dr, dc in self.ACTIONS:
                 nr, nc = cr + dr, cc + dc
                 neighbor = (nr, nc)
-
                 if not self.is_valid(nr, nc):
                     continue
 
                 tentative_g = g_score[current] + 1  # uniform cost per move
-
                 if neighbor not in g_score or tentative_g < g_score[neighbor]:
                     came_from[neighbor] = current
                     g_score[neighbor] = tentative_g
@@ -106,4 +102,16 @@ class MazeAStar:
                         open_set_hash.add(neighbor)
 
         # No path found
-        return []
+        return ([], steps) if track_steps else []
+
+    """
+    Public method to return just the optimal path (classic solve)
+    """
+    def solve(self):
+        return self._astar(track_steps=False)
+
+    """
+    Public method to return both the path and exploration steps (with animation)
+    """
+    def solve_with_steps(self):
+        return self._astar(track_steps=True)
