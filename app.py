@@ -3,6 +3,7 @@ from fastapi.staticfiles import StaticFiles
 from maze_generator import MazeGenerator
 from maze_mdp import MazeMDP
 from maze_AStar import MazeAStar
+from maze_BFS import MazeBFS
 import numpy as np
 
 app = FastAPI()
@@ -43,7 +44,22 @@ def solve_maze_mdp():
     return {
         "path": path,
         "metrics": metrics,
-        "V": {f"{r},{c}": v for (r,c), v in V.items()}
+        "values": {f"{r},{c}": v for (r,c), v in V.items()}
     }
     
+
+@app.get("/api/maze/solveWithBFS")
+def solve_maze_bfs():
+    if CURRENT_MAZE["grid"] is None:
+        return {"error": "No maze generated yet."}
+
+    solver = MazeBFS(CURRENT_MAZE["grid"], CURRENT_MAZE["start"], CURRENT_MAZE["goal"])
+    path, steps, metrics = solver.solve_with_steps()
+
+    return {
+        "path": [list(pos) for pos in path],
+        "steps": [list(pos) for pos in steps],
+        "metrics": metrics
+    }
+
 app.mount("/", StaticFiles(directory=".", html=True), name="frontend")

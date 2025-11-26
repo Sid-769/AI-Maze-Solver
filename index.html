@@ -12,38 +12,170 @@
             --accent: #1e90ff;
         }
 
-        html,body{height:100%;margin:0;background:var(--bg);color:white;font-family:Arial,Helvetica,sans-serif;}
-        .app{display:flex;flex-direction:column;align-items:center;padding:16px;box-sizing:border-box;}
-        header{width:100%;max-width:1200px;display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;}
-        h1{margin:0;font-size:20px;}
-        .controls{display:flex;gap:8px;align-items:center;}
-        button{padding:8px 14px;background:#444;border:1px solid var(--muted);color:white;cursor:pointer;border-radius:4px;font-size:14px;}
-        .main {width: 100%;max-width: 1400px;display: flex;gap: 20px;align-items: flex-start;box-sizing: border-box;}
+        html, body {
+            height: 100%;
+            margin: 0;
+            background: var(--bg);
+            color: white;
+            font-family: Arial, Helvetica, sans-serif;
+        }
 
-        /* left canvas area */
-        .canvas-wrap { flex: 1 1 60%; display: flex;align-items: flex-start;justify-content: center;background: transparent;position: relative;min-width: 400px;}
-        #mazeCanvas{border:2px solid white;display:block;background:#111;}
+        .app {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 16px;
+            box-sizing: border-box;
+        }
 
-        /* right panel */
-        .panel {flex: 0 0 360px;min-width: 300px;max-width: 400px;background: var(--panel);border: 1px solid var(--muted);padding: 14px;box-sizing: border-box;border-radius: 6px;font-size: 14px;line-height: 1.4;}
-        .panel h3{margin:8px 0 6px 0;font-size:15px;border-bottom:1px solid #333;padding-bottom:6px;}
-        .metrics-row{margin-bottom:8px;}
-        .legend{margin-top:8px;}
-        .legend-item{display:flex;align-items:center;gap:8px;margin-bottom:6px;}
-        .legend-color{width:20px;height:20px;border:1px solid #555;}
-        .heatmap-toggle{margin-top:10px;font-size:13px;}
-        .hidden{display:none !important;}
-        .heatmap-preview{height:18px;border-radius:4px;border:1px solid #333;margin-top:8px;margin-bottom:6px;}
-        .note{font-size:12px;color:#ccc;margin-top:8px;}
-        .explain{font-size:13px;color:#ddd;padding:8px;background:#0f0f0f;border-radius:6px;margin-top:8px;border:1px solid #222;}
-        .hover-info{font-size:13px;color:#eee;margin-top:8px;padding:8px;background:#0f0f0f;border-radius:6px;border:1px solid #222;}
-        header h1 {flex: 1 1 100%; text-align: center; font-size: 36px;font-weight: bold;color: white;
-    }
+        header {
+            width: 100%;
+            max-width: 1200px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            margin-bottom: 12px;
+        }
 
-        @media (max-width:900px){
-            .main{flex-direction:column;align-items:center;}
-            .panel{width:92%;max-width:420px; font-size: 15px; line-height: 1.5;}
-            .canvas-wrap{width:92%;}
+        header h1 {
+            font-size: 36px;
+            font-weight: bold;
+            text-align: center;
+            margin: 0;
+        }
+
+        .main {
+            display: flex;
+            gap: 20px;
+            width: 100%;
+            max-width: 1600px;
+            box-sizing: border-box;
+        }
+
+        .canvas-wrap {
+            flex: 1 1 auto;
+            min-width: 300px;
+            max-width: calc(100% - 320px);
+            display: flex;
+            align-items: flex-start;
+            justify-content: center;
+            position: relative;
+        }
+
+        .left-panel {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            width: 380px;
+            flex-shrink: 0;        
+        }
+
+        .controls {
+            display: flex;
+            gap: 12px;
+            flex-wrap: wrap;
+            justify-content: flex-start;
+        }
+
+        button {
+            padding: 10px 20px;
+            min-width: 120px;
+            background: #444;
+            border: 1px solid var(--muted);
+            color: white;
+            cursor: pointer;
+            border-radius: 4px;
+            font-size: 14px;
+            white-space: nowrap;
+        }
+
+        #mazeCanvas {
+            border: 2px solid white;
+            display: block;
+            background: #111;
+        }
+
+        /* Metrics panel */
+        .panel {
+            width: 100%;
+            background: var(--panel);
+            border: 1px solid var(--muted);
+            padding: 14px;
+            box-sizing: border-box;
+            border-radius: 6px;
+            font-size: 14px;
+            line-height: 1.4;
+        }
+
+        .panel h3 {
+            margin: 8px 0 6px 0;
+            font-size: 15px;
+            border-bottom: 1px solid #333;
+            padding-bottom: 6px;
+        }
+
+        .metrics-row {
+            margin-bottom: 8px;
+        }
+
+        .legend {
+            margin-top: 8px;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 6px;
+        }
+
+        .legend-color {
+            width: 20px;
+            height: 20px;
+            border: 1px solid #555;
+        }
+
+        .heatmap-toggle {
+            margin-top: 10px;
+            font-size: 13px;
+        }
+
+        .hidden { display: none !important; }
+        .heatmap-preview { height: 18px; border-radius: 4px; border: 1px solid #333; margin-top: 8px; margin-bottom: 6px; }
+        .note { font-size: 12px; color: #ccc; margin-top: 8px; }
+        .explain { font-size: 13px; color: #ddd; padding: 8px; background: #0f0f0f; border-radius: 6px; margin-top: 8px; border: 1px solid #222; }
+        .hover-info { font-size: 13px; color: #eee; margin-top: 8px; padding: 8px; background: #0f0f0f; border-radius: 6px; border: 1px solid #222; }
+
+        #tooltip {
+            position: fixed;
+            background: rgba(0,0,0,0.85);
+            padding: 8px 10px;
+            border-radius: 6px;
+            color: white;
+            font-size: 13px;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.15s ease;
+            z-index: 9999;
+        }
+
+        @media (max-width:900px) {
+            .main {
+                flex-direction: column;
+                align-items: center;
+            }
+
+            .left-panel, .canvas-wrap {
+                width: 92%;
+                min-width: auto;
+            }
+
+            .panel {
+                width: 100%;
+                max-width: 420px;
+                font-size: 15px;
+                line-height: 1.5;
+            }
         }
     </style>
 </head>
@@ -51,39 +183,28 @@
     <div class="app">
         <header>
             <h1 class="main-header">Maze Solver</h1>
-            <div class="controls">
-                <button id="genBtn" onclick="generateMaze()">Generate Maze</button>
-                <button id="astarBtn" onclick="solveAndAnimateAStar()">Solve with A*</button>
-                <button id="mdpBtn" onclick="solveAndAnimateMDP()">Solve with MDP</button>
-            </div>
         </header>
 
-            <div class="main">
-                <div class="canvas-wrap">
-                    <canvas id="mazeCanvas" aria-label="Maze canvas"></canvas>
+        <div class="main">
+            <div class="canvas-wrap">
+                <canvas id="mazeCanvas" aria-label="Maze canvas"></canvas>
+            </div>
+
+            <div class="left-panel">
+                <div class="controls">
+                    <button id="genBtn" onclick="generateMaze()">Generate Maze</button>
+                    <button id="astarBtn" onclick="solveAndAnimateAStar()">Solve with A*</button>
+                    <button id="bfsBtn" onclick="solveAndAnimateBFS()">Solve with BFS</button>
+                    <button id="mdpBtn" onclick="solveAndAnimateMDP()">Solve with MDP</button>
                 </div>
 
-                <div id="tooltip" style="
-                position: fixed;
-                background: rgba(0,0,0,0.85);
-                padding: 8px 10px;
-                border-radius: 6px;
-                color: white;
-                font-size: 13px;
-                pointer-events: none;
-                opacity: 0;
-                transition: opacity 0.15s ease;
-                z-index: 9999;
-                "></div>
-
-            <aside class="panel">
-                <h3>Metrics</h3>
-
-                <div id="sharedMetrics">
-                    <div class="metrics-row">Nodes Visited: <strong id="nodesVisited">0</strong></div>
-                    <div class="metrics-row">Path Length: <strong id="pathLength">0</strong></div>
-                    <div class="metrics-row">Execution Time: <strong id="executionTime">0</strong> ms</div>
-                </div>
+                <aside class="panel">
+                    <h3>Metrics</h3>
+                    <div id="sharedMetrics">
+                        <div class="metrics-row">Nodes Visited: <strong id="nodesVisited">0</strong></div>
+                        <div class="metrics-row">Path Length: <strong id="pathLength">0</strong></div>
+                        <div class="metrics-row">Execution Time: <strong id="executionTime">0</strong> ms</div>
+                    </div>
 
                 <div id="astarMetrics" class="hidden">
                     <h3>A* details</h3>
@@ -121,15 +242,47 @@
                         <em>h</em> = estimated cost to reach the goal (heuristic).<br>
                         <em>f</em> = g + h, the total priority (smaller f → explored first).<br>
                         <br>
-                        Think of f as a “score” for each cell: the lower, the more promising.<br>
+                        Think of f as a “score” for each cell (lower is better)<br>
                         A* expands nodes with the smallest f first, balancing distance traveled and estimated distance remaining.<br>
                         <br>
                         Example: On a grid, g = steps from start, h = Manhattan distance to goal.
                     </div>
 
-                        <div class="hover-info" id="hoverInfo">
-                            Hover a cell to see its g / h / f here.
-                        </div>
+                <div id="astarHoverInfo" class="hover-info">
+                    Hover a cell to see its g / h / f here.
+                </div>
+                    </div>
+                </div>
+
+                <div id="bfsMetrics" class="hidden">
+                    <h3>BFS details</h3>
+                    <div class="metrics-row">Nodes Visited: <strong id="bfsNodesVisited">0</strong></div>
+                    <div class="metrics-row">Path Length: <strong id="bfsPathLength">0</strong></div>
+                    <div class="metrics-row">Path Turns: <strong id="bfsPathTurns">0</strong></div>
+                    <div class="metrics-row">Shortest Manhattan Path: <strong id="bfsManhattan">0</strong></div>
+                    <div class="metrics-row">Optimality Ratio: <strong id="bfsOptimalityRatio">0</strong></div>
+                    <div class="metrics-row">Max Queue Size: <strong id="bfsMaxQueueSize">0</strong></div>
+
+                    <h3>Legend</h3>
+                    <div class="legend">
+                        <div class="legend-item"><div class="legend-color" style="background:green;"></div>Start</div>
+                        <div class="legend-item"><div class="legend-color" style="background:red;"></div>Goal</div>
+                        <div class="legend-item"><div class="legend-color" style="background:blue;"></div>Final path</div>
+                        <div class="legend-item"><div class="legend-color" id="bfsHeatLow" style="background:cyan;"></div><span id="bfsHeatLowLabel">Low</span></div>
+                        <div class="legend-item"><div class="legend-color" id="bfsHeatHigh" style="background:orange;"></div><span id="bfsHeatHighLabel">High</span></div>
+                    </div>
+
+                    <div class="explain">
+                        <strong>BFS quick explanation:</strong><br>
+                        BFS explores all nodes level by level, guaranteeing the shortest path in unweighted grids.<br>
+                        <em>g</em> = cost so far from the start node (number of steps taken).<br>
+                        <em>f</em> = total priority (for BFS, f = g).<br>
+                        <em>Nodes Visited</em> = number of explored cells.<br>
+                        <em>Path Turns</em> = number of direction changes along the path.<br>
+                        <em>Optimality Ratio</em> = path length divided by Manhattan distance.
+                    </div>
+                    <div class="hover-info" id="bfsHoverInfo">
+                        Hover a cell to see its g/f value here.
                     </div>
                 </div>
 
@@ -157,8 +310,9 @@
                         <em>Reward System</em>- Step cost = -0.05, Goal reward = 10.<br>
                         <em>Stochasticity</em> = actions succeed 80% of the time; 10% slip left/right.<br>
                     </div>
+                </aside>
             </div>
-            </aside>
+            <div id="tooltip"></div>
         </div>
     </div>
 
