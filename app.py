@@ -22,8 +22,13 @@ def solve_maze_a_star():
     if CURRENT_MAZE["grid"] is None:
         return {"error": "No maze generated yet."}
     solver = MazeAStar(CURRENT_MAZE["grid"], CURRENT_MAZE["start"], CURRENT_MAZE["goal"])
-    path, steps = solver.solve_with_steps()
-    return {"path": [list(pos) for pos in path], "steps": [list(pos) for pos in steps]}
+    path, steps, scores, metrics = solver._astar(track_steps=True, track_scores=True)
+    return {
+        "path": [list(pos) for pos in path],
+        "steps": [list(pos) for pos in steps],
+        "scores": [{"pos": list(s["pos"]), "g": s["g"], "f": s["f"]} for s in scores],
+        "metrics": metrics
+    }
 
 @app.get("/api/maze/solveWithMdp")
 def solve_maze_mdp():

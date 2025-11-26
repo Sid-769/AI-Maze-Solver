@@ -62,7 +62,7 @@ class MazeAStar:
         path: the final optimal path
         steps: the order in which nodes were explored (only if track_steps=True)
     """
-    def _astar(self, track_steps=False):
+    def _astar(self, track_steps=False, track_scores=False):
         start, goal = self.start, self.goal
 
         open_set = []
@@ -73,17 +73,47 @@ class MazeAStar:
         open_set_hash = {start}
 
         steps = []
+        scores = []  # g/f per step
+
+        max_open_set_size = 1
+        f_sum = g_sum = h_sum = 0
+        expanded_count = 0
 
         while open_set:
             _, current = heapq.heappop(open_set)
             open_set_hash.remove(current)
+            expanded_count += 1
 
             if track_steps:
-                steps.append(current)  # track exploration for animation
+                steps.append(current)
+                if track_scores:
+                    scores.append({
+                        "pos": current,
+                        "g": g_score[current],
+                        "f": f_score[current]
+                    })
+
+            g_val = g_score[current]
+            f_val = f_score[current]
+            h_val = f_val - g_val
+            g_sum += g_val
+            f_sum += f_val
+            h_sum += h_val
 
             if current == goal:
                 path = self.reconstruct_path(came_from, current)
-                return (path, steps) if track_steps else path
+                result = (path, steps, scores) if track_steps else path
+                metrics = {
+                    "maxOpenSetSize": max_open_set_size,
+                    "avgF": f_sum / expanded_count if expanded_count else 0,
+                    "avgG": g_sum / expanded_count if expanded_count else 0,
+                    "avgH": h_sum / expanded_count if expanded_count else 0
+                }
+                if track_steps and track_scores:
+                    return (*result, metrics)
+                elif track_steps:
+                    return (*result, metrics)
+                return (path, metrics)
 
             cr, cc = current
             for dr, dc in self.ACTIONS:
@@ -92,17 +122,29 @@ class MazeAStar:
                 if not self.is_valid(nr, nc):
                     continue
 
-                tentative_g = g_score[current] + 1  # uniform cost per move
-                if neighbor not in g_score or tentative_g < g_score[neighbor]:
-                    came_from[neighbor] = current
+                tentative_g = g_score[current] + 1
+                if neighbor not in g_score:
                     g_score[neighbor] = tentative_g
+
+                if neighbor not in f_score or tentative_g + self.heuristic(neighbor, goal) < f_score.get(neighbor, float('inf')):
+                    came_from[neighbor] = current
                     f_score[neighbor] = tentative_g + self.heuristic(neighbor, goal)
                     if neighbor not in open_set_hash:
                         heapq.heappush(open_set, (f_score[neighbor], neighbor))
                         open_set_hash.add(neighbor)
 
+            max_open_set_size = max(max_open_set_size, len(open_set_hash))
+
         # No path found
-        return ([], steps) if track_steps else []
+        metrics = {
+            "maxOpenSetSize": max_open_set_size,
+            "avgF": f_sum / expanded_count if expanded_count else 0,
+            "avgG": g_sum / expanded_count if expanded_count else 0,
+            "avgH": h_sum / expanded_count if expanded_count else 0
+        }
+        if track_steps:
+            return ([], steps, scores, metrics)
+        return ([], metrics)
 
     """
     Public method to return just the optimal path (classic solve)

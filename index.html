@@ -2,39 +2,140 @@
 <html>
 <head>
     <title>Maze Solver</title>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
     <style>
-        body { 
-            background: #202020; 
-            color: white; 
-            font-family: Arial; 
-            text-align: center; 
+        :root {
+            --bg: #202020;
+            --panel: #111;
+            --muted: #888;
+            --accent: #1e90ff;
         }
-        canvas { 
-            border: 2px solid white; 
-            margin-top: 20px; 
-        }
-        button {
-            padding: 10px 18px;
-            background: #444;
-            color: white;
-            border: 1px solid #888;
-            font-size: 16px;
-            cursor: pointer;
-            margin: 10px 5px;
+
+        html,body{height:100%;margin:0;background:var(--bg);color:white;font-family:Arial,Helvetica,sans-serif;}
+        .app{display:flex;flex-direction:column;align-items:center;padding:16px;box-sizing:border-box;}
+        header{width:100%;max-width:1200px;display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;}
+        h1{margin:0;font-size:20px;}
+        .controls{display:flex;gap:8px;align-items:center;}
+        button{padding:8px 14px;background:#444;border:1px solid var(--muted);color:white;cursor:pointer;border-radius:4px;font-size:14px;}
+        .main {width: 100%;max-width: 1400px;display: flex;gap: 20px;align-items: flex-start;box-sizing: border-box;}
+
+        /* left canvas area */
+        .canvas-wrap { flex: 1 1 60%; display: flex;align-items: flex-start;justify-content: center;background: transparent;position: relative;min-width: 400px;}
+        #mazeCanvas{border:2px solid white;display:block;background:#111;}
+
+        /* right panel */
+        .panel {flex: 0 0 360px;min-width: 300px;max-width: 400px;background: var(--panel);border: 1px solid var(--muted);padding: 14px;box-sizing: border-box;border-radius: 6px;font-size: 14px;line-height: 1.4;}
+        .panel h3{margin:8px 0 6px 0;font-size:15px;border-bottom:1px solid #333;padding-bottom:6px;}
+        .metrics-row{margin-bottom:8px;}
+        .legend{margin-top:8px;}
+        .legend-item{display:flex;align-items:center;gap:8px;margin-bottom:6px;}
+        .legend-color{width:20px;height:20px;border:1px solid #555;}
+        .heatmap-toggle{margin-top:10px;font-size:13px;}
+        .hidden{display:none !important;}
+        .heatmap-preview{height:18px;border-radius:4px;border:1px solid #333;margin-top:8px;margin-bottom:6px;}
+        .note{font-size:12px;color:#ccc;margin-top:8px;}
+        .explain{font-size:13px;color:#ddd;padding:8px;background:#0f0f0f;border-radius:6px;margin-top:8px;border:1px solid #222;}
+        .hover-info{font-size:13px;color:#eee;margin-top:8px;padding:8px;background:#0f0f0f;border-radius:6px;border:1px solid #222;}
+        header h1 {flex: 1 1 100%; text-align: center; font-size: 36px;font-weight: bold;color: white;
+    }
+
+        @media (max-width:900px){
+            .main{flex-direction:column;align-items:center;}
+            .panel{width:92%;max-width:420px; font-size: 15px; line-height: 1.5;}
+            .canvas-wrap{width:92%;}
         }
     </style>
 </head>
 <body>
+    <div class="app">
+        <header>
+            <h1 class="main-header">Maze Solver</h1>
+            <div class="controls">
+                <button id="genBtn" onclick="generateMaze()">Generate Maze</button>
+                <button id="astarBtn" onclick="solveAndAnimateAStar()">Solve with A*</button>
+                <button id="mdpBtn" onclick="solveAndAnimateMDP()">Solve with MDP</button>
+            </div>
+        </header>
 
-<h1>Maze Solver</h1>
+            <div class="main">
+                <div class="canvas-wrap">
+                    <canvas id="mazeCanvas" aria-label="Maze canvas"></canvas>
+                </div>
 
-<button onclick="generateMaze()">Generate Maze</button>
-<button onclick="solveAndAnimateAStar()">Solve with A*</button>
-<button onclick="solveAndAnimateMDP()">Solve with MDP</button>
-<br>
+                <div id="tooltip" style="
+                position: fixed;
+                background: rgba(0,0,0,0.85);
+                padding: 8px 10px;
+                border-radius: 6px;
+                color: white;
+                font-size: 13px;
+                pointer-events: none;
+                opacity: 0;
+                transition: opacity 0.15s ease;
+                z-index: 9999;
+                "></div>
 
-<canvas id="mazeCanvas" width="600" height="600"></canvas>
+            <aside class="panel">
+                <h3>Metrics</h3>
 
-<script src="main.js"></script>
+                <div id="sharedMetrics">
+                    <div class="metrics-row">Nodes Visited: <strong id="nodesVisited">0</strong></div>
+                    <div class="metrics-row">Path Length: <strong id="pathLength">0</strong></div>
+                    <div class="metrics-row">Execution Time: <strong id="executionTime">0</strong> ms</div>
+                </div>
+
+                <div id="astarMetrics" class="hidden">
+                    <h3>A* details</h3>
+                    <div class="metrics-row">Path Cost (sum g-values): <strong id="pathCost">0</strong></div>
+                    <div class="metrics-row">Number of Turns: <strong id="pathTurns">0</strong></div>
+                    <div class="metrics-row">Shortest Manhattan Path: <strong id="manhattanPath">0</strong></div>
+                    <div class="metrics-row">Percentage Nodes Pruned: <strong id="nodesPruned">0</strong>%</div>
+                    <div class="metrics-row">Optimality Ratio: <strong id="optimalityRatio">0</strong></div>
+                    <div class="metrics-row">Path Smoothness: <strong id="pathSmoothness">0</strong></div>
+                    <div class="metrics-row">Max Open Set Size: <strong id="maxOpenSetSize">0</strong></div>
+                    <div class="metrics-row">Avg f-value: <strong id="avgF">0</strong></div>
+                    <div class="metrics-row">Avg g-value: <strong id="avgG">0</strong></div>
+                    <div class="metrics-row">Avg h-value: <strong id="avgH">0</strong></div>
+
+                    <h3>Legend</h3>
+                    <div class="legend">
+                        <div class="legend-item"><div class="legend-color" style="background:green;"></div>Start</div>
+                        <div class="legend-item"><div class="legend-color" style="background:red;"></div>Goal</div>
+                        <div class="legend-item"><div class="legend-color" style="background:blue;"></div>Final path</div>
+                        <div class="legend-item"><div class="legend-color" id="heatLow" style="background:cyan;"></div><span id="heatLowLabel">Low</span></div>
+                        <div class="legend-item"><div class="legend-color" id="heatHigh" style="background:orange;"></div><span id="heatHighLabel">High</span></div>
+                    </div>
+
+                    <div class="heatmap-toggle">
+                        <label><input type="radio" name="heatmap" value="f" checked onchange="setHeatmap('f')"> f-value</label><br>
+                        <label><input type="radio" name="heatmap" value="g" onchange="setHeatmap('g')"> g-value</label><br>
+                        <label><input type="radio" name="heatmap" value="h" onchange="setHeatmap('h')"> h-value</label>
+
+                        <div class="heatmap-preview" id="heatPreview" title="Current heatmap gradient"></div>
+                        <div class="note">Toggle the heatmap to inspect different quantities A* uses. Final path stays blue.</div>
+
+                    <div class="explain">
+                        <strong>A* quick:</strong><br>
+                        <em>g</em> = cost so far from the start node (how far you’ve traveled).<br>
+                        <em>h</em> = estimated cost to reach the goal (heuristic).<br>
+                        <em>f</em> = g + h, the total priority (smaller f → explored first).<br>
+                        <br>
+                        Think of f as a “score” for each cell: the lower, the more promising.<br>
+                        A* expands nodes with the smallest f first, balancing distance traveled and estimated distance remaining.<br>
+                        <br>
+                        Example: On a grid, g = steps from start, h = Manhattan distance to goal.
+                    </div>
+
+                        <div class="hover-info" id="hoverInfo">
+                            Hover a cell to see its g / h / f here.
+                        </div>
+                    </div>
+                </div>
+            </aside>
+        </div>
+    </div>
+
+    <script src="main.js"></script>
 </body>
 </html>
