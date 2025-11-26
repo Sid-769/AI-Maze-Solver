@@ -116,7 +116,7 @@
                         <div class="note">Toggle the heatmap to inspect different quantities A* uses. Final path stays blue.</div>
 
                     <div class="explain">
-                        <strong>A* quick:</strong><br>
+                        <strong>A* quick explanation:</strong><br>
                         <em>g</em> = cost so far from the start node (how far you’ve traveled).<br>
                         <em>h</em> = estimated cost to reach the goal (heuristic).<br>
                         <em>f</em> = g + h, the total priority (smaller f → explored first).<br>
@@ -132,6 +132,32 @@
                         </div>
                     </div>
                 </div>
+
+                <div id="mdpMetrics" class="hidden">
+                    <h3>MDP details</h3>
+                    <div class="metrics-row">Path Length: <strong id="mdpPathLength">0</strong></div>
+                    <div class="metrics-row">Number of Turns: <strong id="mdpPathTurns">0</strong></div>
+                    <div class="metrics-row">Total Reward Collected: <strong id="mdpTotalReward">0</strong></div>
+                    <div class="metrics-row">Average Step Cost: <strong id="mdpAvgStepCost">0</strong></div>
+                    <div class="metrics-row">Slips / Deviations: <strong id="mdpSlips">0</strong></div>
+                    <div class="metrics-row">Failed Moves: <strong id="mdpFailedMoves">0</strong></div>
+                    <div class="metrics-row">Max State Value: <strong id="mdpMaxValue">0</strong></div>
+                    <div class="metrics-row">Min State Value: <strong id="mdpMinValue">0</strong></div>
+                    <div class="metrics-row">Average State Value: <strong id="mdpAvgValue">0</strong></div>
+                    <div class="metrics-row">Computation Time: <strong id="mdpCompTime">0</strong> ms</div>
+                    <div class="metrics-row">Shortest Manhattan Path: <strong id="mdpManhattan">0</strong></div>
+                    <div class="metrics-row">Path Optimality Ratio: <strong id="mdpOptimality">0</strong></div>
+                    <div class="explain">
+                        <strong>MDP metrics explained:</strong><br>
+                        <em>Slips / Deviations</em> = times the agent moved in an unintended direction.<br>
+                        <em>Failed Moves</em> = times the agent attempted to move into a wall.<br>
+                        <em>Total Reward</em> = sum of step rewards collected.<br>
+                        <em>State Values</em> = expected cumulative reward from each cell.<br>
+                        <em>Path Optimality Ratio</em> = path length divided by shortest possible path.<br>
+                        <em>Reward System</em>- Step cost = -0.05, Goal reward = 10.<br>
+                        <em>Stochasticity</em> = actions succeed 80% of the time; 10% slip left/right.<br>
+                    </div>
+            </div>
             </aside>
         </div>
     </div>

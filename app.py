@@ -34,8 +34,16 @@ def solve_maze_a_star():
 def solve_maze_mdp():
     if CURRENT_MAZE["grid"] is None:
         return {"error": "No maze generated yet."}
+
     mdp = MazeMDP(CURRENT_MAZE["grid"], CURRENT_MAZE["start"], CURRENT_MAZE["goal"])
-    V, policy, path = mdp.mdp_solver()
-    return {"path": [list(pos) for pos in path]}
+    
+    # Solve the MDP and get both path and metrics
+    path, metrics, V = mdp.mdp_solver()
+
+    return {
+        "path": path,
+        "metrics": metrics,
+        "V": {f"{r},{c}": v for (r,c), v in V.items()}
+    }
     
 app.mount("/", StaticFiles(directory=".", html=True), name="frontend")

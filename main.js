@@ -47,9 +47,44 @@ function resetAStarMetrics() {
     document.getElementById("pathTurns").innerText = 0;
     document.getElementById("manhattanPath").innerText = 0;
     document.getElementById("nodesPruned").innerText = 0;
+    document.getElementById("optimalityRatio").innerText = 0;
+    document.getElementById("pathSmoothness").innerText = 0;
+    document.getElementById("maxOpenSetSize").innerText = 0;
+    document.getElementById("avgF").innerText = 0;
+    document.getElementById("avgG").innerText = 0;
+    document.getElementById("avgH").innerText = 0;
 }
-function showAStarMetrics() { document.getElementById("astarMetrics").classList.remove("hidden"); updateHeatPreview(); }
-function hideAStarMetrics() { document.getElementById("astarMetrics").classList.add("hidden"); updateHeatPreview(); }
+function resetMDPMetrics() {
+    document.getElementById("mdpPathLength").innerText = 0;
+    document.getElementById("mdpPathTurns").innerText = 0;
+    document.getElementById("mdpTotalReward").innerText = 0;
+    document.getElementById("mdpAvgStepCost").innerText = 0;
+    document.getElementById("mdpSlips").innerText = 0;
+    document.getElementById("mdpFailedMoves").innerText = 0;
+    document.getElementById("mdpMaxValue").innerText = 0;
+    document.getElementById("mdpMinValue").innerText = 0;
+    document.getElementById("mdpAvgValue").innerText = 0;
+    document.getElementById("mdpCompTime").innerText = 0;
+    document.getElementById("mdpManhattan").innerText = 0;
+    document.getElementById("mdpOptimality").innerText = 0;
+}
+
+function showAStarMetrics() { 
+    resetAStarMetrics();
+    document.getElementById("astarMetrics").classList.remove("hidden"); 
+    updateHeatPreview(); 
+}
+function hideAStarMetrics() { 
+    document.getElementById("astarMetrics").classList.add("hidden"); 
+    updateHeatPreview(); 
+}
+function showMDPMetrics() { 
+    resetMDPMetrics();
+    document.getElementById("mdpMetrics").classList.remove("hidden");
+}
+function hideMDPMetrics() { 
+    document.getElementById("mdpMetrics").classList.add("hidden"); 
+}
 
 // ---------------- HEATMAP ----------------
 function updateHeatPreview() {
@@ -102,6 +137,24 @@ function drawHeatmapCell(r, c, valueNorm) {
     const margin = Math.max(1, Math.floor(cellSize * 0.2));
     const size = Math.max(1, cellSize - 2 * margin);
     ctx.fillRect(c * cellSize + margin, r * cellSize + margin, size, size);
+}
+
+function drawMDPHeatmap(V) {
+    if (!CURRENT_GRID.length) return;
+    drawMaze(CURRENT_GRID);
+
+    const values = Object.values(V);
+    const minVal = Math.min(...values);
+    const maxVal = Math.max(...values);
+
+    for (const [r, c] of Object.keys(V).map(k => k.split(',').map(Number))) {
+        const v = V[`${r},${c}`];
+        const norm = (v - minVal) / (maxVal - minVal || 1);
+        drawHeatmapCell(r, c, norm);
+    }
+
+    // draw final path on top
+    if (CURRENT_PATH.length) animatePath(CURRENT_PATH, "yellow", 30);
 }
 
 // ---------------- MAZE DRAW ----------------
@@ -255,8 +308,11 @@ canvas.addEventListener("mouseleave", () => {
 // ---------------- GENERATE MAZE ----------------
 async function generateMaze() {
     animationId++;
-    resetSharedMetrics(); resetAStarMetrics();
+    resetSharedMetrics(); 
+    resetAStarMetrics();
+    resetMDPMetrics();
     hideAStarMetrics();
+    hideMDPMetrics();
     CURRENT_GRID=[]; CURRENT_PATH=[]; START_POS=null; GOAL_POS=null;
     LAST_STEPS=[]; LAST_SCORES=[]; SCORE_MAP={};
     ctx.clearRect(0,0,canvas.width,canvas.height);
@@ -281,6 +337,7 @@ async function generateMaze() {
 async function solveAndAnimateAStar() {
     if(!CURRENT_GRID.length) return;
     showAStarMetrics();
+    hideMDPMetrics();
     animationId++; const myId=animationId;
 
     LAST_STEPS=[]; LAST_SCORES=[]; SCORE_MAP={}; CURRENT_PATH=[];
@@ -355,30 +412,58 @@ async function solveAndAnimateAStar() {
 // ---------------- SOLVE MDP ----------------
 async function solveAndAnimateMDP() {
     hideAStarMetrics();
-    if(!CURRENT_GRID.length) return;
-    animationId++; const myId=animationId;
-    LAST_STEPS=[]; LAST_SCORES=[]; SCORE_MAP={}; CURRENT_PATH=[];
+    showMDPMetrics();
+
+    if (!CURRENT_GRID.length) return;
+
+    animationId++; 
+    const myId = animationId;
+    LAST_STEPS = []; 
+    LAST_SCORES = []; 
+    SCORE_MAP = {}; 
+    CURRENT_PATH = [];
 
     const startTime = performance.now();
     let data;
     try {
         const res = await fetch("/api/maze/solveWithMdp");
         data = await res.json();
-    } catch(err){ alert("MDP call failed: "+err.message); return; }
+    } catch (err) {
+        alert("MDP call failed: " + err.message);
+        return;
+    }
 
-    const path = data?.path||[];
+    const path = data?.path || [];
+    const metrics = data?.metrics || {};
     CURRENT_PATH = path;
 
+    // Shared metrics
     document.getElementById("nodesVisited").innerText = path.length;
     document.getElementById("pathLength").innerText = path.length;
-    document.getElementById("executionTime").innerText = Math.round(performance.now()-startTime);
+    document.getElementById("executionTime").innerText = Math.round(performance.now() - startTime);
+
+    // MDP-specific metrics
+    document.getElementById("mdpPathLength").innerText = metrics["Path Length"];
+    document.getElementById("mdpPathTurns").innerText = metrics["Number of Turns"];
+    document.getElementById("mdpTotalReward").innerText = metrics["Total Reward Collected"]?.toFixed(2);
+    document.getElementById("mdpAvgStepCost").innerText = metrics["Average Step Cost"]?.toFixed(3);
+    document.getElementById("mdpSlips").innerText = metrics["Slips / Deviations"];
+    document.getElementById("mdpFailedMoves").innerText = metrics["Failed Moves"];
+    document.getElementById("mdpMaxValue").innerText = metrics["Max State Value"]?.toFixed(2);
+    document.getElementById("mdpMinValue").innerText = metrics["Min State Value"]?.toFixed(2);
+    document.getElementById("mdpAvgValue").innerText = metrics["Average State Value"]?.toFixed(2);
+    document.getElementById("mdpCompTime").innerText = metrics["Computation Time"];
+    document.getElementById("mdpManhattan").innerText = metrics["Shortest Manhattan Path"];
+    document.getElementById("mdpOptimality").innerText = metrics["Path Optimality Ratio"]?.toFixed(2);
 
     drawMaze(CURRENT_GRID);
-    await animatePath(CURRENT_PATH,"yellow",30,myId);
+    await animatePath(CURRENT_PATH, "yellow", 30, myId);
 }
+
 
 // ---------------- INIT ----------------
 (function init(){
     hideAStarMetrics();
+    hideMDPMetrics();
     updateHeatPreview();
 })();
