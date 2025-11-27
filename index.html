@@ -4,200 +4,26 @@
     <title>Maze Solver</title>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width,initial-scale=1" />
-    <style>
-        :root {
-            --bg: #202020;
-            --panel: #111;
-            --muted: #888;
-            --accent: #1e90ff;
-        }
-
-        html, body {
-            height: 100%;
-            margin: 0;
-            background: var(--bg);
-            color: white;
-            font-family: Arial, Helvetica, sans-serif;
-        }
-
-        .app {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            padding: 16px;
-            box-sizing: border-box;
-        }
-
-        header {
-            width: 100%;
-            max-width: 1200px;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            margin-bottom: 12px;
-        }
-
-        header h1 {
-            font-size: 36px;
-            font-weight: bold;
-            text-align: center;
-            margin: 0;
-        }
-
-        .main {
-            display: flex;
-            gap: 20px;
-            width: 100%;
-            max-width: 1600px;
-            box-sizing: border-box;
-        }
-
-        .canvas-wrap {
-            flex: 1 1 auto;
-            min-width: 300px;
-            max-width: calc(100% - 320px);
-            display: flex;
-            align-items: flex-start;
-            justify-content: center;
-            position: relative;
-        }
-
-        .left-panel {
-            display: flex;
-            flex-direction: column;
-            gap: 12px;
-            width: 380px;
-            flex-shrink: 0;        
-        }
-
-        .controls {
-            display: flex;
-            gap: 12px;
-            flex-wrap: wrap;
-            justify-content: flex-start;
-        }
-
-        button {
-            padding: 10px 20px;
-            min-width: 120px;
-            background: #444;
-            border: 1px solid var(--muted);
-            color: white;
-            cursor: pointer;
-            border-radius: 4px;
-            font-size: 14px;
-            white-space: nowrap;
-        }
-
-        #mazeCanvas {
-            border: 2px solid white;
-            display: block;
-            background: #111;
-        }
-
-        /* Metrics panel */
-        .panel {
-            width: 100%;
-            background: var(--panel);
-            border: 1px solid var(--muted);
-            padding: 14px;
-            box-sizing: border-box;
-            border-radius: 6px;
-            font-size: 14px;
-            line-height: 1.4;
-        }
-
-        .panel h3 {
-            margin: 8px 0 6px 0;
-            font-size: 15px;
-            border-bottom: 1px solid #333;
-            padding-bottom: 6px;
-        }
-
-        .metrics-row {
-            margin-bottom: 8px;
-        }
-
-        .legend {
-            margin-top: 8px;
-        }
-
-        .legend-item {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            margin-bottom: 6px;
-        }
-
-        .legend-color {
-            width: 20px;
-            height: 20px;
-            border: 1px solid #555;
-        }
-
-        .heatmap-toggle {
-            margin-top: 10px;
-            font-size: 13px;
-        }
-
-        .hidden { display: none !important; }
-        .heatmap-preview { height: 18px; border-radius: 4px; border: 1px solid #333; margin-top: 8px; margin-bottom: 6px; }
-        .note { font-size: 12px; color: #ccc; margin-top: 8px; }
-        .explain { font-size: 13px; color: #ddd; padding: 8px; background: #0f0f0f; border-radius: 6px; margin-top: 8px; border: 1px solid #222; }
-        .hover-info { font-size: 13px; color: #eee; margin-top: 8px; padding: 8px; background: #0f0f0f; border-radius: 6px; border: 1px solid #222; }
-
-        #tooltip {
-            position: fixed;
-            background: rgba(0,0,0,0.85);
-            padding: 8px 10px;
-            border-radius: 6px;
-            color: white;
-            font-size: 13px;
-            pointer-events: none;
-            opacity: 0;
-            transition: opacity 0.15s ease;
-            z-index: 9999;
-        }
-
-        @media (max-width:900px) {
-            .main {
-                flex-direction: column;
-                align-items: center;
-            }
-
-            .left-panel, .canvas-wrap {
-                width: 92%;
-                min-width: auto;
-            }
-
-            .panel {
-                width: 100%;
-                max-width: 420px;
-                font-size: 15px;
-                line-height: 1.5;
-            }
-        }
-    </style>
+    <link rel="stylesheet" href="style.css">
 </head>
 <body>
     <div class="app">
         <header>
             <h1 class="main-header">Maze Solver</h1>
         </header>
-
+        <div class="toolbar">
+            <button id="genBtn" onclick="generateMaze()">Generate Maze</button>
+            <button id="astarBtn" onclick="solveAndAnimateAStar()">Solve with A*</button>
+            <button id="bfsBtn" onclick="solveAndAnimateBFS()">Solve with BFS</button>
+            <button id="dfsBtn" onclick="solveAndAnimateDFS()">Solve with DFS</button>
+            <button id="mdpBtn" onclick="solveAndAnimateMDP()">Solve with MDP</button>
+        </div>
         <div class="main">
             <div class="canvas-wrap">
                 <canvas id="mazeCanvas" aria-label="Maze canvas"></canvas>
             </div>
 
             <div class="left-panel">
-                <div class="controls">
-                    <button id="genBtn" onclick="generateMaze()">Generate Maze</button>
-                    <button id="astarBtn" onclick="solveAndAnimateAStar()">Solve with A*</button>
-                    <button id="bfsBtn" onclick="solveAndAnimateBFS()">Solve with BFS</button>
-                    <button id="mdpBtn" onclick="solveAndAnimateMDP()">Solve with MDP</button>
-                </div>
-
                 <aside class="panel">
                     <h3>Metrics</h3>
                     <div id="sharedMetrics">
@@ -229,9 +55,9 @@
                     </div>
 
                     <div class="heatmap-toggle">
-                        <label><input type="radio" name="heatmap" value="f" checked onchange="setHeatmap('f')"> f-value</label><br>
-                        <label><input type="radio" name="heatmap" value="g" onchange="setHeatmap('g')"> g-value</label><br>
-                        <label><input type="radio" name="heatmap" value="h" onchange="setHeatmap('h')"> h-value</label>
+                        <label><input type="radio" name="heatmap" value="f" onclick="renderAStarHeatmap('f')"> f-value </label><br>
+                        <label><input type="radio" name="heatmap" value="g" onclick="renderAStarHeatmap('g')"> g-value </label><br>
+                        <label><input type="radio" name="heatmap" value="h" onclick="renderAStarHeatmap('h')"> h-value</label>
 
                         <div class="heatmap-preview" id="heatPreview" title="Current heatmap gradient"></div>
                         <div class="note">Toggle the heatmap to inspect different quantities A* uses. Final path stays blue.</div>
@@ -273,16 +99,58 @@
                     </div>
 
                     <div class="explain">
-                        <strong>BFS quick explanation:</strong><br>
-                        BFS explores all nodes level by level, guaranteeing the shortest path in unweighted grids.<br>
-                        <em>g</em> = cost so far from the start node (number of steps taken).<br>
-                        <em>f</em> = total priority (for BFS, f = g).<br>
-                        <em>Nodes Visited</em> = number of explored cells.<br>
-                        <em>Path Turns</em> = number of direction changes along the path.<br>
-                        <em>Optimality Ratio</em> = path length divided by Manhattan distance.
+                        <strong>BFS — Quick Overview</strong><br>
+                        Breadth-First Search expands the maze level-by-level, ensuring the shortest path on any unweighted grid.<br>
+                        <em>g</em>: Distance from the start (number of steps taken).<br>
+                        <em>f</em>: Priority value (for BFS, <em>f = g</em> since all edges have equal cost).<br>
+                        <em>Nodes Visited</em>: Total number of cells explored during the search.<br>
+                        <em>Path Turns</em>: Number of direction changes along the final path.<br>
+                        <em>Optimality Ratio</em>: Path length divided by the Manhattan distance between start and goal.
                     </div>
                     <div class="hover-info" id="bfsHoverInfo">
                         Hover a cell to see its g/f value here.
+                    </div>
+                </div>
+                
+                <div id="dfsMetrics" class="hidden">
+                    <h3>DFS details</h3>
+
+                    <div class="metrics-row">Nodes Visited: <strong id="dfsNodesVisited">0</strong></div>
+                    <div class="metrics-row">Path Length: <strong id="dfsPathLength">0</strong></div>
+                    <div class="metrics-row">Path Turns: <strong id="dfsPathTurns">0</strong></div>
+                    <div class="metrics-row">Max Stack Depth: <strong id="dfsMaxDepth">0</strong></div>
+                    <div class="metrics-row">Dead Ends Encountered: <strong id="dfsDeadEnds">0</strong></div>
+                    <div class="metrics-row">Backtracks: <strong id="dfsBacktracks">0</strong></div>
+
+                    <h3>Legend</h3>
+                    <div class="legend">
+                        <div class="legend-item"><div class="legend-color" style="background:green;"></div>Start</div>
+                        <div class="legend-item"><div class="legend-color" style="background:red;"></div>Goal</div>
+                        <div class="legend-item"><div class="legend-color" style="background:blue;"></div>Final path</div>
+                        <div class="legend-item">
+                            <div class="legend-color" id="dfsHeatLow" style="background:cyan;"></div><span id="dfsHeatLowLabel">Shallow</span>
+                        </div>
+                        <div class="legend-item">
+                            <div class="legend-color" id="dfsHeatHigh" style="background:orange;"></div><span id="dfsHeatHighLabel">Deep</span>
+                        </div>
+                    </div>
+
+                    <div class="explain">
+                        <strong>DFS — Quick Overview</strong><br>
+                        Depth-First Search explores the maze by going as far as possible along one branch before backtracking.<br>
+                        <em>DFS does not guarantee the shortest path</em> and is sensitive to recursion/stack depth.<br><br>
+
+                        <em>Nodes Visited</em>: Total explored cells.<br>
+                        <em>Max Stack Depth</em>: Deepest the DFS recursion/stack reached.<br>
+                        <em>Dead Ends</em>: Times the algorithm hit a cell with no unexplored neighbors.<br>
+                        <em>Backtracks</em>: Number of times DFS reversed direction due to dead ends.<br>
+                        <em>Path Turns</em>: Total direction changes in the final path.<br><br>
+
+                        DFS is useful for full exploration and maze generation, but not efficient for path optimality.
+                    </div>
+
+                    <div class="hover-info" id="dfsHoverInfo">
+                        Hover a cell to see its DFS depth here.
                     </div>
                 </div>
 
@@ -315,7 +183,6 @@
             <div id="tooltip"></div>
         </div>
     </div>
-
     <script src="main.js"></script>
 </body>
 </html>

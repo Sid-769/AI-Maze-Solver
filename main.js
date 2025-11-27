@@ -30,6 +30,12 @@ function computeCellSize(rows, cols) {
     return Math.floor(MAX_CANVAS_PIXELS / Math.max(rows, cols));
 }
 
+async function apiFetchJson(url, options = {}) {
+    const resp = await fetch(url, options);
+    if (!resp.ok) throw new Error(`HTTP error! status: ${resp.status}`);
+    return await resp.json();
+}
+
 // color helpers
 function hexToRgb(hex) {
     hex = (hex||"").replace("#", "");
@@ -72,6 +78,31 @@ function resetAStarMetrics() {
 function showAStarMetrics() { resetAStarMetrics(); q("#astarMetrics").classList.remove("hidden"); updateHeatPreview(); }
 function hideAStarMetrics() { q("#astarMetrics").classList.add("hidden"); updateHeatPreview(); }
 
+// BFS metrics  
+function resetBFSMetrics() {
+    el("bfsNodesVisited").innerText = 0;
+    el("bfsPathLength").innerText = 0;
+    el("bfsPathTurns").innerText = 0;
+    el("bfsManhattan").innerText = 0;
+    el("bfsOptimalityRatio").innerText = 0;
+    el("bfsMaxQueueSize").innerText = 0;
+}
+function hideBFSMetrics() {q("#bfsMetrics").classList.add("hidden");}
+function showBFSMetrics() { resetBFSMetrics(); q("#bfsMetrics").classList.remove("hidden");}
+
+// DFS metrics
+function resetDFSMetrics() {
+    el("dfsNodesVisited").innerText = 0;
+    el("dfsPathLength").innerText = 0;
+    el("dfsPathTurns").innerText = 0;
+    el("dfsMaxDepth").innerText = 0;
+    el("dfsDeadEnds").innerText = 0;
+    el("dfsBacktracks").innerText = 0;
+}
+
+function hideDFSMetrics() {q("#dfsMetrics").classList.add("hidden");}
+function showDFSMetrics() {resetDFSMetrics();q("#dfsMetrics").classList.remove("hidden");}
+
 // MDP metrics
 function resetMDPMetrics() {
     el("mdpPathLength").innerText = 0;
@@ -89,15 +120,6 @@ function resetMDPMetrics() {
 }
 function showMDPMetrics() { resetMDPMetrics(); q("#mdpMetrics").classList.remove("hidden"); }
 function hideMDPMetrics() { q("#mdpMetrics").classList.add("hidden"); }
-function resetBFSMetrics() {
-    el("bfsNodesVisited").innerText = 0;
-    el("bfsPathLength").innerText = 0;
-    el("bfsPathTurns").innerText = 0;
-    el("bfsManhattan").innerText = 0;
-    el("bfsOptimalityRatio").innerText = 0;
-    el("bfsMaxQueueSize").innerText = 0;
-}
-function hideBFSMetrics() {q("#bfsMetrics").classList.add("hidden");}
 
 // tiny DOM helpers
 function q(sel) { return document.querySelector(sel); }
@@ -163,27 +185,41 @@ function drawHeatmapCell(r, c, valueNorm) {
     ctx.fillRect(c * cellSize + margin, r * cellSize + margin, size, size);
 }
 
-// Draw MDP value heatmap (V(s) on grid). Doesn't change heatmapMode (but uses drawHeatmapCell color mapping).
-// V is expected to be object mapping "r,c" -> numeric value
-function drawMDPValueHeatmap(V) {
-    if (!GRID.length) return;
+function renderAStarHeatmap(mode) {
+    if (!explorationSteps.length || !explorationScores.length) return;
+
+    heatmapMode = mode;
+    updateHeatPreview();
+
+    animId++;
+    const localId = animId;
     drawMaze(GRID);
 
-    const values = Object.values(V);
-    if (!values.length) return;
-    const minVal = Math.min(...values);
-    const maxVal = Math.max(...values);
+    (async () => {
+        const values = explorationScores.map(s =>
+            mode === 'f' ? s.f
+            : mode === 'g' ? s.g
+            : s.h
+        );
+        const minVal = Math.min(...values);
+        const maxVal = Math.max(...values);
+        const rows = GRID.length, cols = GRID[0].length;
+        const delay = Math.max(4, Math.min(40, Math.floor(10000 / Math.max(rows * cols, 100))));
 
-    // iterate keys in V
-    Object.keys(V).forEach(k => {
-        const [r, c] = fromKey(k);
-        const v = V[k];
-        const norm = (v - minVal) / (maxVal - minVal || 1);
-        drawHeatmapCell(r, c, norm);
-    });
+        for (let i = 0; i < explorationSteps.length; i++) {
+            if (localId !== animId) return;
 
-    // overlay path (if present)
-    if (PATH && PATH.length) animatePath(PATH, "yellow", 30);
+            const [r, c] = explorationSteps[i];
+            const raw = mode === 'f' ? explorationScores[i].f
+                      : mode === 'g' ? explorationScores[i].g
+                      : explorationScores[i].h;
+            const norm = (raw - minVal) / (maxVal - minVal || 1);
+            drawHeatmapCell(r, c, norm);
+            await new Promise(res => setTimeout(res, delay));
+        }
+
+        if (PATH && PATH.length) await animatePath(PATH, "blue", 30, localId);
+    })();
 }
 
 // ====================== CANVAS DRAWING ======================
@@ -241,7 +277,7 @@ function buildScoreMap() {
     scoreMap = {};
     for (const s of explorationScores) {
         const key = toKey(s.pos[0], s.pos[1]);
-        scoreMap[key] = { g: s.g, f: s.f, h: s.f - s.g };
+        scoreMap[key] = { g: s.g ?? 0, f: s.f ?? 0, h: (s.f ?? 0) - (s.g ?? 0) };
     }
 }
 
@@ -312,6 +348,7 @@ canvas.addEventListener("mouseleave", () => {
     // Reset text in whichever hover div is active
     if (!q("#astarMetrics").classList.contains("hidden")) el("astarHoverInfo").innerText = "Hover a cell to see its g / h / f here.";
     if (!q("#bfsMetrics").classList.contains("hidden")) el("bfsHoverInfo").innerText = "Hover a cell to see its g/f here.";
+    if (!q("#dfsMetrics").classList.contains("hidden")) el("dfsHoverInfo").innerText = "Hover a cell to see DFS depth here.";
 });
 
 // ====================== SERVER / API CALLS (fetch wrappers) ======================
@@ -331,9 +368,11 @@ async function generateMaze() {
     resetAStarMetrics();
     resetMDPMetrics();
     resetBFSMetrics();
+    resetDFSMetrics();
     hideAStarMetrics();
     hideMDPMetrics();
     hideBFSMetrics();
+    hideDFSMetrics();
 
     GRID = []; PATH = []; START_POS = null; GOAL_POS = null;
     explorationSteps = []; explorationScores = []; scoreMap = {};
@@ -356,22 +395,44 @@ async function generateMaze() {
     }
 }
 
-// ---- A* solving and visualization ----
-async function solveAndAnimateAStar() {
+// ---------------- Shared solver/animation helper ----------------
+async function solveAndAnimateSolver({
+    apiEndpoint,
+    solverName,       // "DFS", "BFS", "AStar", "MDP"
+    showMetricsFn,    // function to show solver-specific metrics panel
+    hideMetricsFns = [], // array of functions to hide other panels
+    pathColor = "blue",
+    heatStartColor = [0, 255, 255], // RGB array
+    heatEndColor = [255, 153, 0],
+    skipStartGoal = true,
+    animateExploration = true,
+    hoverElId,
+    processScoresFn = null, // optional: modify explorationScores after fetch
+}) {
     if (!GRID.length) return;
-    showAStarMetrics();
-    hideMDPMetrics();
-    hideBFSMetrics();
-    animId++; const localId = animId;
 
-    explorationSteps = []; explorationScores = []; scoreMap = {}; PATH = [];
+    // Reset UI
+    resetSharedMetrics();
+    hideMetricsFns.forEach(fn => fn());
+    showMetricsFn();
+
+    const hoverEl = el(hoverElId);
+    if (hoverEl) hoverEl.innerText = `Hover a cell to inspect ${solverName} exploration.`;
+
+    animId++;
+    const localId = animId;
+
+    PATH = [];
+    explorationSteps = [];
+    explorationScores = [];
+    scoreMap = {};
 
     const startTime = performance.now();
     let data;
     try {
-        data = await apiFetchJson("/api/maze/solveWithAStar");
+        data = await apiFetchJson(apiEndpoint);
     } catch (err) {
-        alert("A* call failed: " + err.message);
+        alert(`${solverName} call failed: ${err.message}`);
         return;
     }
     const endTime = performance.now();
@@ -381,187 +442,142 @@ async function solveAndAnimateAStar() {
     const scores = data.scores || [];
     const metrics = data.metrics || {};
 
-    explorationSteps = steps;
-    explorationScores = scores;
     PATH = path;
+    explorationSteps = steps.map(s => Array.isArray(s[0]) ? [s[0][0], s[0][1]] : [s[0], s[1]]);
+    explorationScores = processScoresFn ? processScoresFn(steps, scores) : steps.map((s, i) => ({ pos: [s[0], s[1]], depth: s[2] || 0 }));
+
     buildScoreMap();
 
-    // compute a few metrics locally
-    const pathCost = path.length;
-    let pathTurns = 0;
-    for (let i = 2; i < path.length; i++) {
-        const [x1, y1] = path[i - 2], [x2, y2] = path[i - 1], [x3, y3] = path[i];
-        if (x2 - x1 !== x3 - x2 || y2 - y1 !== y3 - y2) pathTurns++;
-    }
-    const manhattan = (START_POS && GOAL_POS) ? Math.abs(START_POS[0] - GOAL_POS[0]) + Math.abs(START_POS[1] - GOAL_POS[1]) : 0;
-    const nodesPruned = steps.length ? (((steps.length - path.length) / steps.length) * 100).toFixed(1) : 0;
-    const optimalityRatio = manhattan > 0 ? (pathCost / manhattan).toFixed(2) : "n/a";
-    const pathSmoothness = pathTurns > 0 ? (pathCost / pathTurns).toFixed(2) : pathCost;
-
-    // shared metrics
+    // Shared metrics
     el("nodesVisited").innerText = steps.length;
     el("pathLength").innerText = path.length;
     el("executionTime").innerText = Math.round(endTime - startTime);
 
-    // A* specific metrics
-    el("pathCost").innerText = pathCost;
-    el("pathTurns").innerText = pathTurns;
-    el("manhattanPath").innerText = manhattan;
-    el("nodesPruned").innerText = nodesPruned;
-    el("optimalityRatio").innerText = optimalityRatio;
-    el("pathSmoothness").innerText = pathSmoothness;
-    el("maxOpenSetSize").innerText = metrics.maxOpenSetSize || 0;
-    el("avgF").innerText = metrics.avgF != null ? metrics.avgF.toFixed(2) : 0;
-    el("avgG").innerText = metrics.avgG != null ? metrics.avgG.toFixed(2) : 0;
-    el("avgH").innerText = metrics.avgH != null ? metrics.avgH.toFixed(2) : 0;
+    // Solver-specific metrics
+    if (solverName === "DFS") {
+        el("dfsNodesVisited").innerText = steps.length;
+        el("dfsPathLength").innerText = path.length;
+        el("dfsMaxDepth").innerText = metrics.maxStackDepth ?? 0;
+        el("dfsDeadEnds").innerText = metrics.deadEnds ?? 0;
+        el("dfsBacktracks").innerText = metrics.backtracks ?? 0;
 
-    // animate exploration heatmap then final path
+        // Count turns
+        let turns = 0;
+        for (let i = 2; i < path.length; i++) {
+            const [x1, y1] = path[i - 2], [x2, y2] = path[i - 1], [x3, y3] = path[i];
+            if (x2 - x1 !== x3 - x2 || y2 - y1 !== y3 - y2) turns++;
+        }
+        el("dfsPathTurns").innerText = turns;
+    }
+    else if (solverName === "BFS") {
+        el("bfsNodesVisited").innerText = metrics.nodesVisited ?? steps.length;
+        el("bfsPathLength").innerText = metrics.pathLength ?? path.length;
+        el("bfsPathTurns").innerText = metrics.pathTurns ?? 0;
+        el("bfsManhattan").innerText = metrics.manhattanPath ?? 0;
+        el("bfsOptimalityRatio").innerText = metrics.optimalityRatio ?? "n/a";
+        el("bfsMaxQueueSize").innerText = metrics.maxQueueSize ?? 0;
+    }
+    else if (solverName === "AStar") {
+        const pathCost = scores.length ? scores[scores.length - 1].g : path.length;
+        let pathTurns = 0;
+        for (let i = 2; i < path.length; i++) {
+            const [x1, y1] = path[i - 2], [x2, y2] = path[i - 1], [x3, y3] = path[i];
+            if (x2 - x1 !== x3 - x2 || y2 - y1 !== y3 - y2) pathTurns++;
+        }
+        const manhattan = (START_POS && GOAL_POS)
+            ? Math.abs(START_POS[0] - GOAL_POS[0]) + Math.abs(START_POS[1] - GOAL_POS[1])
+            : 0;
+        const nodesPruned = explorationSteps.length
+            ? (((explorationSteps.length - path.length) / explorationSteps.length) * 100).toFixed(1)
+            : 0;
+        const optimalityRatio = manhattan > 0 ? (pathCost / manhattan).toFixed(2) : "n/a";
+        const pathSmoothness = pathTurns > 0 ? (pathCost / pathTurns).toFixed(2) : pathCost;
+
+        // Fill DOM elements
+        el("pathCost").innerText = pathCost;
+        el("pathTurns").innerText = pathTurns;
+        el("manhattanPath").innerText = manhattan;
+        el("nodesPruned").innerText = nodesPruned;
+        el("optimalityRatio").innerText = optimalityRatio;
+        el("pathSmoothness").innerText = pathSmoothness;
+
+        el("maxOpenSetSize").innerText = metrics.maxOpenSetSize ?? 0;
+        el("avgF").innerText = metrics.avgF != null ? metrics.avgF.toFixed(2) : 0;
+        el("avgG").innerText = metrics.avgG != null ? metrics.avgG.toFixed(2) : 0;
+        el("avgH").innerText = metrics.avgH != null ? metrics.avgH.toFixed(2) : 0;
+    }
+    else if (solverName === "MDP") {
+        el("nodesVisited").innerText = path.length;
+        el("mdpPathLength").innerText = metrics["Path Length"] ?? path.length;
+        el("mdpPathTurns").innerText = metrics["Number of Turns"] ?? 0;
+        el("mdpTotalReward").innerText =
+            typeof metrics["Total Reward Collected"] === "number"
+                ? metrics["Total Reward Collected"].toFixed(2)
+                : 0;
+        el("mdpAvgStepCost").innerText =
+            typeof metrics["Average Step Cost"] === "number"
+                ? metrics["Average Step Cost"].toFixed(3)
+                : 0;
+        el("mdpSlips").innerText = metrics["Slips / Deviations"] ?? 0;
+        el("mdpFailedMoves").innerText = metrics["Failed Moves"] ?? 0;
+        el("mdpMaxValue").innerText =
+            typeof metrics["Max State Value"] === "number"
+                ? metrics["Max State Value"].toFixed(2)
+                : 0;
+        el("mdpMinValue").innerText =
+            typeof metrics["Min State Value"] === "number"
+                ? metrics["Min State Value"].toFixed(2)
+                : 0;
+        el("mdpAvgValue").innerText =
+            typeof metrics["Average State Value"] === "number"
+                ? metrics["Average State Value"].toFixed(2)
+                : 0;
+        el("mdpCompTime").innerText = metrics["Computation Time"] ?? 0;
+        el("mdpManhattan").innerText = metrics["Shortest Manhattan Path"] ?? 0;
+        el("mdpOptimality").innerText =
+            typeof metrics["Path Optimality Ratio"] === "number"
+                ? metrics["Path Optimality Ratio"].toFixed(2)
+                : metrics["Path Optimality Ratio"] ?? 0;
+    }
+
     drawMaze(GRID);
-    if (explorationSteps.length && explorationScores.length) {
-        const values = explorationScores.map(s => (heatmapMode === 'f' ? s.f : (heatmapMode === 'g' ? s.g : s.f - s.g)));
+
+    if (animateExploration && explorationSteps.length) {
+        const rows = GRID.length, cols = GRID[0].length;
+        const totalSteps = explorationSteps.length;
+        const delay = Math.max(4, Math.min(40, Math.floor(10000 / Math.max(rows * cols, 100))));
+
+        // Compute normalized scores for heatmap
+        const values = explorationScores.map(s => {
+            if (solverName === "AStar") {
+                if (heatmapMode === "f") return s.f ?? s.g ?? 0;
+                if (heatmapMode === "g") return s.g ?? 0;
+                if (heatmapMode === "h") return s.h ?? (s.f != null && s.g != null ? s.f - s.g : 0);
+            } else if (solverName === "BFS") {
+                return s.g ?? s.depth ?? 0; // fallback to depth if g missing
+            } else if (solverName === "DFS" || solverName === "MDP") {
+                return s.depth ?? 0;
+            }
+            return 0; // fallback default
+        });
+
         const minVal = Math.min(...values);
         const maxVal = Math.max(...values);
-        const rows = GRID.length, cols = GRID[0].length;
-        const delay = Math.max(4, Math.min(40, Math.floor(10000 / Math.max(rows * cols, 100))));
-
-        for (let i = 0; i < explorationSteps.length; i++) {
-            if (localId !== animId) return; // canceled
-            const [r, c] = explorationSteps[i];
-            const score = explorationScores[i];
-            const raw = heatmapMode === 'f' ? score.f : (heatmapMode === 'g' ? score.g : score.f - score.g);
-            const norm = (raw - minVal) / (maxVal - minVal || 1);
-            drawHeatmapCell(r, c, norm);
-            await new Promise(res => setTimeout(res, delay));
-        }
-    }
-
-    await animatePath(PATH, "blue", 30, localId);
-    updateHeatPreview();
-    el("hoverInfo").innerText = "Hover a cell to see its g / h / f here.";
-}
-
-// ---- MDP solving and visualization ----
-async function solveAndAnimateMDP() {
-    hideAStarMetrics();
-    hideBFSMetrics();
-    showMDPMetrics();
-
-    if (!GRID.length) return;
-    animId++; const localId = animId;
-    explorationSteps = []; explorationScores = []; scoreMap = {}; PATH = [];
-
-    const startTime = performance.now();
-    let data;
-    try {
-        data = await apiFetchJson("/api/maze/solveWithMdp");
-    } catch (err) {
-        alert("MDP call failed: " + err.message);
-        return;
-    }
-    const endTime = performance.now();
-
-    const path = data?.path || [];
-    const metrics = data?.metrics || {};
-    PATH = path;
-
-    // shared metrics
-    el("nodesVisited").innerText = path.length;
-    el("pathLength").innerText = path.length;
-    el("executionTime").innerText = Math.round(endTime - startTime);
-
-    // mdp metrics display
-    el("mdpPathLength").innerText = metrics["Path Length"] ?? 0;
-    el("mdpPathTurns").innerText = metrics["Number of Turns"] ?? 0;
-    el("mdpTotalReward").innerText = typeof metrics["Total Reward Collected"] === "number" ? metrics["Total Reward Collected"].toFixed(2) : 0;
-    el("mdpAvgStepCost").innerText = typeof metrics["Average Step Cost"] === "number" ? metrics["Average Step Cost"].toFixed(3) : 0;
-    el("mdpSlips").innerText = metrics["Slips / Deviations"] ?? 0;
-    el("mdpFailedMoves").innerText = metrics["Failed Moves"] ?? 0;
-    el("mdpMaxValue").innerText = typeof metrics["Max State Value"] === "number" ? metrics["Max State Value"].toFixed(2) : 0;
-    el("mdpMinValue").innerText = typeof metrics["Min State Value"] === "number" ? metrics["Min State Value"].toFixed(2) : 0;
-    el("mdpAvgValue").innerText = typeof metrics["Average State Value"] === "number" ? metrics["Average State Value"].toFixed(2) : 0;
-    el("mdpCompTime").innerText = metrics["Computation Time"] ?? 0;
-    el("mdpManhattan").innerText = metrics["Shortest Manhattan Path"] ?? 0;
-    el("mdpOptimality").innerText = typeof metrics["Path Optimality Ratio"] === "number" ? metrics["Path Optimality Ratio"].toFixed(2) : metrics["Path Optimality Ratio"] ?? 0;
-
-    // draw path (no exploration animation for mdp)
-    drawMaze(GRID);
-    await animatePath(PATH, "yellow", 30, localId);
-}
-
-async function solveAndAnimateBFS() {
-    if (!GRID.length) return;
-
-    // Reset metrics and show BFS panel
-    resetSharedMetrics();
-    hideAStarMetrics();
-    hideMDPMetrics();
-    q("#bfsMetrics").classList.remove("hidden");
-
-    // Reset hover info for BFS
-    const hoverEl = el("bfsHoverInfo");
-    if (hoverEl) hoverEl.innerText = "Hover a cell to inspect BFS exploration steps.";
-
-    animId++;
-    const localId = animId;
-    PATH = [];
-    explorationSteps = [];
-    explorationScores = []; // reset
-
-    const startTime = performance.now();
-    let data;
-    try {
-        data = await apiFetchJson("/api/maze/solveWithBFS");
-    } catch (err) {
-        alert("BFS call failed: " + err.message);
-        return;
-    }
-
-    const path = data.path || [];
-    const steps = data.steps || [];
-    const metrics = data.metrics || {};
-
-    PATH = path;
-    explorationSteps = steps;
-
-    // Populate explorationScores (f = g for BFS, h = n/a)
-    explorationScores = explorationSteps.map((pos, idx) => ({ pos, g: idx, h: 'n/a', f: idx }));
-    buildScoreMap();
-
-    // Shared metrics
-    el("nodesVisited").innerText = metrics.nodesVisited ?? steps.length;
-    el("pathLength").innerText = metrics.pathLength ?? path.length;
-    el("executionTime").innerText = Math.round(performance.now() - startTime);
-
-    // BFS-specific metrics
-    el("bfsNodesVisited").innerText = metrics.nodesVisited ?? steps.length;
-    el("bfsPathLength").innerText = metrics.pathLength ?? path.length;
-    el("bfsPathTurns").innerText = metrics.pathTurns ?? 0;
-    el("bfsManhattan").innerText = metrics.manhattanPath ?? 0;
-    el("bfsOptimalityRatio").innerText = metrics.optimalityRatio ?? "n/a";
-    el("bfsMaxQueueSize").innerText = metrics.maxQueueSize ?? 0;
-
-    // Draw maze background
-    drawMaze(GRID);
-
-    // Animate BFS exploration
-    if (explorationSteps.length) {
-        const rows = GRID.length;
-        const cols = GRID[0].length;
-        const delay = Math.max(4, Math.min(40, Math.floor(10000 / Math.max(rows * cols, 100))));
-        const totalSteps = explorationSteps.length;
 
         for (let i = 0; i < totalSteps; i++) {
-            if (localId !== animId) return; // canceled
+            if (localId !== animId) return;
             const [r, c] = explorationSteps[i];
 
-            if ((START_POS && r === START_POS[0] && c === START_POS[1]) ||
-                (GOAL_POS && r === GOAL_POS[0] && c === GOAL_POS[1])) continue;
+            if (skipStartGoal &&
+                ((START_POS && r === START_POS[0] && c === START_POS[1]) ||
+                (GOAL_POS && r === GOAL_POS[0] && c === GOAL_POS[1]))) continue;
 
-            // Gradient: light sky blue → bright yellow
-            const t = i / totalSteps;
-            const startColor = [135, 206, 250];
-            const endColor = [255, 255, 102];
-            const color = startColor.map((v, idx) => Math.round(v + (endColor[idx]-v)*t));
+            // Normalize score for gradient
+            const raw = values[i];
+            const norm = (raw - minVal) / (maxVal - minVal || 1);
+
+            // Interpolate between start and end color
+            const color = heatStartColor.map((v, idx) => Math.round(v + (heatEndColor[idx] - v) * norm));
             ctx.fillStyle = `rgb(${color[0]},${color[1]},${color[2]})`;
 
             const cellSize = computeCellSize(rows, cols);
@@ -573,53 +589,97 @@ async function solveAndAnimateBFS() {
         }
     }
 
-    // Animate final path
-    if (PATH && PATH.length) {
-        await animatePath(PATH, "blue", 30, localId);
+    if (PATH.length) await animatePath(PATH, pathColor, 30, localId);
+
+    if (solverName === "AStar" && initialHeatmapMode) {
+        renderAStarHeatmap(initialHeatmapMode);
     }
 
-    // Reset BFS hover info
-    if (hoverEl) hoverEl.innerText = "Hover a cell to see its g/f here.";
+    if (hoverEl) hoverEl.innerText = `Hover a cell to see ${solverName} details here.`;
+}
+
+// ----------------- Solver wrappers -----------------
+function solveAndAnimateDFS() {
+    return solveAndAnimateSolver({
+        apiEndpoint: "/api/maze/solveWithDFS",
+        solverName: "DFS",
+        showMetricsFn: showDFSMetrics,
+        hideMetricsFns: [hideAStarMetrics, hideBFSMetrics, hideMDPMetrics],
+        pathColor: "blue",
+        heatStartColor: [0, 255, 255],
+        heatEndColor: [255, 153, 0],
+        hoverElId: "dfsHoverInfo",
+        processScoresFn: (steps) =>
+            steps.map((s, idx) => ({
+                pos: Array.isArray(s[0]) ? [s[0][0], s[0][1]] : [s[0], s[1]],
+                depth: idx,
+            }))
+    });
+}
+
+function solveAndAnimateBFS() {
+    return solveAndAnimateSolver({
+        apiEndpoint: "/api/maze/solveWithBFS",
+        solverName: "BFS",
+        showMetricsFn: showBFSMetrics,
+        hideMetricsFns: [hideAStarMetrics, hideDFSMetrics, hideMDPMetrics],
+        pathColor: "blue",
+        heatStartColor: [135, 206, 250],
+        heatEndColor: [255, 165, 0],
+        hoverElId: "bfsHoverInfo",
+        processScoresFn: (steps) => steps.map((pos, idx) => ({ pos, g: idx, h: "n/a", f: idx }))
+    });
+}
+
+function solveAndAnimateAStar() {
+    return solveAndAnimateSolver({
+        apiEndpoint: "/api/maze/solveWithAStar",
+        solverName: "AStar",
+        showMetricsFn: showAStarMetrics,
+        hideMetricsFns: [hideBFSMetrics, hideDFSMetrics, hideMDPMetrics],
+        pathColor: "blue",
+        heatStartColor: [0, 255, 0],
+        heatEndColor: [255, 0, 0],
+        hoverElId: "astarHoverInfo",
+        initialHeatmapMode: heatmapMode,
+        processScoresFn: (steps, scores) => {
+            return steps.map((s, i) => {
+                const pos = Array.isArray(s[0]) ? [s[0][0], s[0][1]] : [s[0], s[1]];
+                const score = scores[i] || {};
+                const g = score.g ?? 0;
+                const f = score.f ?? g;
+                const h = f - g;
+                return { pos, g, f, h, depth: s[2] ?? 0 };
+            });
+        }
+    });
+}
+
+function solveAndAnimateMDP() {
+    return solveAndAnimateSolver({
+        apiEndpoint: "/api/maze/solveWithMDP",
+        solverName: "MDP",
+        showMetricsFn: showMDPMetrics,
+        hideMetricsFns: [hideAStarMetrics, hideBFSMetrics, hideDFSMetrics],
+        pathColor: "blue",
+        heatStartColor: [255, 255, 0],
+        heatEndColor: [0, 0, 255],
+        hoverElId: "mdpHoverInfo",
+    });
 }
 
 // ====================== INIT / BOOT ======================
-(function init() {
-    hideAStarMetrics();
-    hideMDPMetrics();
-    hideBFSMetrics();
-    updateHeatPreview();
-})();
+    (function init() {
+        hideAStarMetrics();
+        hideMDPMetrics();
+        hideBFSMetrics();
+        hideDFSMetrics();
+        updateHeatPreview();
+    })();
 
 // ====================== EXPORTS / EVENT HOOKS ======================
-// (these are the functions your HTML expects to call)
 window.generateMaze = generateMaze;
 window.solveAndAnimateAStar = solveAndAnimateAStar;
 window.solveAndAnimateMDP = solveAndAnimateMDP;
 window.solveAndAnimateBFS = solveAndAnimateBFS;
-window.setHeatmap = function (mode) {
-    heatmapMode = mode;
-    updateHeatPreview();
-    // only re-render heatmap if we have A* exploration data
-    if (explorationSteps.length && explorationScores.length) {
-        animId++;
-        const localId = animId;
-        drawMaze(GRID);
-        (async () => {
-            const values = explorationScores.map(s => (heatmapMode === 'f' ? s.f : (heatmapMode === 'g' ? s.g : s.f - s.g)));
-            const minVal = Math.min(...values);
-            const maxVal = Math.max(...values);
-            const rows = GRID.length, cols = GRID[0].length;
-            const delay = Math.max(4, Math.min(40, Math.floor(10000 / Math.max(rows * cols, 100))));
-            for (let i = 0; i < explorationSteps.length; i++) {
-                if (localId !== animId) return;
-                const [r, c] = explorationSteps[i];
-                const score = explorationScores[i];
-                const raw = heatmapMode === 'f' ? score.f : (heatmapMode === 'g' ? score.g : score.f - score.g);
-                const norm = (raw - minVal) / (maxVal - minVal || 1);
-                drawHeatmapCell(r, c, norm);
-                await new Promise(res => setTimeout(res, delay));
-            }
-            if (PATH && PATH.length) await animatePath(PATH, "blue", 30, localId);
-        })();
-    }
-};
+window.solveAndAnimateDFS = solveAndAnimateDFS;

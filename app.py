@@ -4,6 +4,7 @@ from maze_generator import MazeGenerator
 from maze_mdp import MazeMDP
 from maze_AStar import MazeAStar
 from maze_BFS import MazeBFS
+from maze_DFS import MazeDFS
 import numpy as np
 
 app = FastAPI()
@@ -31,7 +32,7 @@ def solve_maze_a_star():
         "metrics": metrics
     }
 
-@app.get("/api/maze/solveWithMdp")
+@app.get("/api/maze/solveWithMDP")
 def solve_maze_mdp():
     if CURRENT_MAZE["grid"] is None:
         return {"error": "No maze generated yet."}
@@ -54,6 +55,20 @@ def solve_maze_bfs():
         return {"error": "No maze generated yet."}
 
     solver = MazeBFS(CURRENT_MAZE["grid"], CURRENT_MAZE["start"], CURRENT_MAZE["goal"])
+    path, steps, metrics = solver.solve_with_steps()
+
+    return {
+        "path": [list(pos) for pos in path],
+        "steps": [list(pos) for pos in steps],
+        "metrics": metrics
+    }
+
+@app.get("/api/maze/solveWithDFS")
+def solve_maze_dfs():
+    if CURRENT_MAZE["grid"] is None:
+        return {"error": "No maze generated yet."}
+
+    solver = MazeDFS(CURRENT_MAZE["grid"], CURRENT_MAZE["start"], CURRENT_MAZE["goal"])
     path, steps, metrics = solver.solve_with_steps()
 
     return {
