@@ -68,10 +68,9 @@
                         <em>h</em> = estimated cost to reach the goal (heuristic).<br>
                         <em>f</em> = g + h, the total priority (smaller f → explored first).<br>
                         <br>
-                        Think of f as a “score” for each cell (lower is better)<br>
-                        A* expands nodes with the smallest f first, balancing distance traveled and estimated distance remaining.<br>
-                        <br>
-                        Example: On a grid, g = steps from start, h = Manhattan distance to goal.
+                        Think of f as a “score” for each cell (lower is better)
+                        A* expands nodes with the smallest f first, balancing distance traveled and estimated distance remaining.
+                        <br> On the grid, g = steps from start, h = Manhattan distance to goal.
                     </div>
 
                 <div id="astarHoverInfo" class="hover-info">
@@ -94,8 +93,8 @@
                         <div class="legend-item"><div class="legend-color" style="background:green;"></div>Start</div>
                         <div class="legend-item"><div class="legend-color" style="background:red;"></div>Goal</div>
                         <div class="legend-item"><div class="legend-color" style="background:blue;"></div>Final path</div>
-                        <div class="legend-item"><div class="legend-color" id="bfsHeatLow" style="background:cyan;"></div><span id="bfsHeatLowLabel">Low</span></div>
-                        <div class="legend-item"><div class="legend-color" id="bfsHeatHigh" style="background:orange;"></div><span id="bfsHeatHighLabel">High</span></div>
+                        <div class="legend-item"><div class="legend-color" id="bfsHeatLow" style="background:cyan;"></div><span id="bfsHeatLowLabel">Low g (near start)”</span></div>
+                        <div class="legend-item"><div class="legend-color" id="bfsHeatHigh" style="background:orange;"></div><span id="bfsHeatHighLabel">High g (far from start)</span></div>
                     </div>
 
                     <div class="explain">

@@ -126,7 +126,6 @@ function q(sel) { return document.querySelector(sel); }
 function el(id) { return document.getElementById(id); }
 
 // ====================== HEATMAP (A* exploration) ======================
-// update the little legend preview for chosen heatmap mode
 function updateHeatPreview() {
     const preview = el("heatPreview");
     const lowBox = el("heatLow");
@@ -135,17 +134,28 @@ function updateHeatPreview() {
     if (!preview) return;
 
     if (heatmapMode === "f") {
-        preview.style.background = "linear-gradient(90deg,#2b83ba 0%,#7fc97f 35%,#ffd92f 70%,#f03b20 100%)";
-        lowBox.style.background = "#2b83ba";
-        highBox.style.background = "#f03b20";
+        // f = g + h  (Preferred → risky)
+        preview.style.background =
+            "linear-gradient(90deg,#2b83ba 0%,#7fc97f 35%,#ffd92f 70%,#f03b20 100%)";
+
+        lowBox.style.background = "#2b83ba";   // Low f
+        highBox.style.background = "#f03b20";  // High f
         lowLabel.innerText = "Low f (preferred)";
-    } else if (heatmapMode === "g") {
-        preview.style.background = "linear-gradient(90deg,#008080 0%,#ffa500 50%,#ff00ff 100%)";
+    }
+
+    else if (heatmapMode === "g") {
+        preview.style.background =
+            "linear-gradient(90deg,#008080 0%,#ffa500 50%,#ff00ff 100%)";
+
         lowBox.style.background = "#008080";
         highBox.style.background = "#ff00ff";
         lowLabel.innerText = "Low g (near start)";
-    } else {
-        preview.style.background = "linear-gradient(90deg,#7a45a6 0%,#ff99cc 60%,#ffffff 100%)";
+    }
+
+    else {
+        preview.style.background =
+            "linear-gradient(90deg,#7a45a6 0%,#ff99cc 60%,#ffffff 100%)";
+
         lowBox.style.background = "#7a45a6";
         highBox.style.background = "#ffffff";
         lowLabel.innerText = "Low h (near goal)";
@@ -156,33 +166,66 @@ function updateHeatPreview() {
 function drawHeatmapCell(r, c, valueNorm) {
     // keep start/goal colors fixed
     if (START_POS && r === START_POS[0] && c === START_POS[1]) {
-        ctx.fillStyle = "blue"; // start
-    } else if (GOAL_POS && r === GOAL_POS[0] && c === GOAL_POS[1]) {
-        ctx.fillStyle = "red";  // goal
-    } else {
+        ctx.fillStyle = "blue";
+    }
+    else if (GOAL_POS && r === GOAL_POS[0] && c === GOAL_POS[1]) {
+        ctx.fillStyle = "red";
+    }
+    else {
         let color;
+
+        // ---------- F mode (f = g + h) ----------
         if (heatmapMode === "f") {
-            if (valueNorm < 0.33) color = lerpColor("#2b83ba", "#7fc97f", valueNorm / 0.33);
-            else if (valueNorm < 0.66) color = lerpColor("#7fc97f", "#ffd92f", (valueNorm - 0.33) / 0.33);
-            else color = lerpColor("#ffd92f", "#f03b20", (valueNorm - 0.66) / 0.34);
-        } else if (heatmapMode === "g") {
+
+            if (valueNorm <= 0.35) {
+                // 0 → 0.35  (blue → green)
+                const t = valueNorm / 0.35;
+                color = lerpColor("#2b83ba", "#7fc97f", t);
+            }
+
+            else if (valueNorm <= 0.7) {
+                // 0.35 → 0.7 (green → yellow)
+                const t = (valueNorm - 0.35) / 0.35;
+                color = lerpColor("#7fc97f", "#ffd92f", t);
+            }
+
+            else {
+                // 0.7 → 1.0 (yellow → red)
+                const t = (valueNorm - 0.7) / 0.3;
+                color = lerpColor("#ffd92f", "#f03b20", t);
+            }
+        }
+
+        // ---------- G mode ----------
+        else if (heatmapMode === "g") {
             color = valueNorm <= 0.5
                 ? lerpColor("#008080", "#ffa500", valueNorm / 0.5)
                 : lerpColor("#ffa500", "#ff00ff", (valueNorm - 0.5) / 0.5);
-        } else {
+        }
+
+        // ---------- H mode ----------
+        else {
             color = valueNorm < 0.6
                 ? lerpColor("#7a45a6", "#ff99cc", valueNorm / 0.6)
                 : lerpColor("#ff99cc", "#ffffff", (valueNorm - 0.6) / 0.4);
         }
+
         ctx.fillStyle = color;
     }
 
+    // Draw cell
     const rows = GRID.length;
     const cols = GRID[0].length;
     const cellSize = computeCellSize(rows, cols);
     const margin = Math.max(1, Math.floor(cellSize * 0.2));
     const size = Math.max(1, cellSize - 2 * margin);
-    ctx.fillRect(c * cellSize + margin, r * cellSize + margin, size, size);
+
+    ctx.fillRect(
+        c * cellSize + margin,
+        r * cellSize + margin,
+        size,
+        size
+    );
 }
 
 function renderAStarHeatmap(mode) {
@@ -303,13 +346,18 @@ function getCellUnderMouse(evt) {
 canvas.addEventListener("mousemove", (e) => {
     if (!GRID.length) return;
 
-    // Determine which hover div is active
+    // Determine which hover div is active (support A*, BFS, and DFS)
     let hoverEl = null;
     let isBFS = false;
+    let isDFS = false;
     if (!q("#astarMetrics").classList.contains("hidden")) hoverEl = el("astarHoverInfo");
     else if (!q("#bfsMetrics").classList.contains("hidden")) {
         hoverEl = el("bfsHoverInfo");
         isBFS = true;
+    }
+    else if (!q("#dfsMetrics").classList.contains("hidden")) {
+        hoverEl = el("dfsHoverInfo");
+        isDFS = true;
     }
     if (!hoverEl) return; // nothing to update
 
@@ -330,6 +378,17 @@ canvas.addEventListener("mousemove", (e) => {
     }
     if (gridVal === 2) info += "Start\n";
     if (gridVal === 3) info += "Goal\n";
+
+    if (isDFS) {
+        let depth = null;
+        for (const es of explorationScores) {
+            if (!es || !es.pos) continue;
+            if (es.pos[0] === cell.r && es.pos[1] === cell.c) { depth = es.depth ?? null; break; }
+        }
+        info += `Depth: ${depth != null ? depth : 'n/a'}`;
+        hoverEl.innerText = info;
+        return;
+    }
 
     const s = scoreMap[key];
     if (s) {
@@ -638,8 +697,9 @@ function solveAndAnimateAStar() {
         showMetricsFn: showAStarMetrics,
         hideMetricsFns: [hideBFSMetrics, hideDFSMetrics, hideMDPMetrics],
         pathColor: "blue",
-        heatStartColor: [0, 255, 0],
-        heatEndColor: [255, 0, 0],
+        // Use cyan -> light-red to match the legend preview for f-values
+        heatStartColor: [43, 131, 186], // #2b83ba
+        heatEndColor: [240, 59, 32],    // #f03b20
         hoverElId: "astarHoverInfo",
         initialHeatmapMode: heatmapMode,
         processScoresFn: (steps, scores) => {
