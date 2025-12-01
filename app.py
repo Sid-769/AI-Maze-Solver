@@ -2,9 +2,10 @@ from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 from maze_generator import MazeGenerator
 from maze_mdp import MazeMDP
-from maze_AStar import MazeAStar
+from maze_aStar import MazeAStar
 from maze_BFS import MazeBFS
 from maze_DFS import MazeDFS
+from maze_rl import MazeRL
 import numpy as np
 
 app = FastAPI()
@@ -75,6 +76,28 @@ def solve_maze_dfs():
         "path": [list(pos) for pos in path],
         "steps": [list(pos) for pos in steps],
         "metrics": metrics
+    }
+
+@app.get("/api/maze/solveWithRL")
+def solve_maze_rl():
+    if CURRENT_MAZE["grid"] is None:
+        return {"error": "No maze generated yet."}
+    
+    solver = MazeRL(CURRENT_MAZE["grid"], CURRENT_MAZE["start"], CURRENT_MAZE["goal"])
+    path, metrics, train_info = solver.rl_solver()
+
+    return {
+        "path": [list(pos) for pos in path],
+        "metrics": metrics,
+        "rewards": train_info["rewards"],
+        "recordedEpisodes": {
+            str(ep): {
+                "path": [list(pos) for pos in data["path"]],
+                "totalReward": data["total_reward"],
+            }
+            for ep, data in train_info["recorded_episodes"].items()
+        },
+        "finalExplorationRate": train_info["final_exploration_rate"]
     }
 
 app.mount("/", StaticFiles(directory=".", html=True), name="frontend")

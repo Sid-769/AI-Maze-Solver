@@ -17,6 +17,7 @@
             <button id="bfsBtn" onclick="solveAndAnimateBFS()">Solve with BFS</button>
             <button id="dfsBtn" onclick="solveAndAnimateDFS()">Solve with DFS</button>
             <button id="mdpBtn" onclick="solveAndAnimateMDP()">Solve with MDP</button>
+            <button id="rlBtn" onclick="solveAndAnimateRL()">Solve with RL</button>
         </div>
         <div class="main">
             <div class="canvas-wrap">
@@ -177,6 +178,32 @@
                         <em>Reward System</em>- Step cost = -0.05, Goal reward = 10.<br>
                         <em>Stochasticity</em> = actions succeed 80% of the time; 10% slip left/right.<br>
                     </div>
+                </div>
+                
+                <div id="rlMetrics" class="hidden">
+                    <h3>RL details</h3>
+                    <div class="metrics-row">Path Length: <strong id="rlPathLength">0</strong></div>
+                    <div class="metrics-row">Number of Turns: <strong id="rlNumTurns">0</strong></div>
+                    <div class="metrics-row">Total Reward Collected: <strong id="rlTotalReward">0</strong></div>
+                    <div class="metrics-row">Average Step Cost: <strong id="rlAvgCost">0</strong></div>
+
+                    <div class="metrics-row">Episodes Trained: <strong id="rlEpisodes">0</strong></div>
+                    <div class="metrics-row">Average Episode Reward: <strong id="rlAvgEpReward">0</strong></div>
+                    <div class="metrics-row">Best Episode Reward: <strong id="rlBestEpReward">0</strong></div>
+                    <div class="metrics-row">Final Exploration Rate: <strong id="rlFinalEps">0</strong></div>
+
+                    <div class="metrics-row">Shortest Manhattan Path: <strong id="rlManhattan">0</strong></div>
+                    <div class="metrics-row">Optimality Ratio: <strong id="rlOptimality">0</strong></div>
+
+                    <div class="metrics-row">Computation Time: <strong id="rlCompTime">0</strong> ms</div>
+
+                    <div class="explain">
+                        <strong>RL Quick Explanation:</strong><br>
+                        Q-Learning learns by exploring random actions and updating a Q-table.<br>
+                        Final path is taken greedily from learned Q-values.<br>
+                    </div>
+
+                
                 </aside>
             </div>
             <div id="tooltip"></div>

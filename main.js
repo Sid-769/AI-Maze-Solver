@@ -1,4 +1,3 @@
-
 // ====================== DOM & CANVAS STATE ======================
 const canvas = document.getElementById("mazeCanvas");
 const ctx = canvas.getContext("2d");
@@ -120,6 +119,30 @@ function resetMDPMetrics() {
 }
 function showMDPMetrics() { resetMDPMetrics(); q("#mdpMetrics").classList.remove("hidden"); }
 function hideMDPMetrics() { q("#mdpMetrics").classList.add("hidden"); }
+
+// RL metrics
+function resetRLMetrics() {
+    el("rlPathLength").innerText = 0;
+    el("rlNumTurns").innerText = 0;
+    el("rlTotalReward").innerText = 0;
+    el("rlAvgCost").innerText = 0;
+
+    el("rlEpisodes").innerText = 0;
+    el("rlAvgEpReward").innerText = 0;
+    el("rlBestEpReward").innerText = 0;
+    el("rlFinalEps").innerText = 0;
+
+    el("rlManhattan").innerText = 0;
+    el("rlOptimality").innerText = 0;
+    el("rlCompTime").innerText = 0;
+}
+function showRLMetrics() {
+    resetRLMetrics();
+    q("#rlMetrics").classList.remove("hidden");
+}
+function hideRLMetrics() {
+    q("#rlMetrics").classList.add("hidden");
+}
 
 // tiny DOM helpers
 function q(sel) { return document.querySelector(sel); }
@@ -428,10 +451,12 @@ async function generateMaze() {
     resetMDPMetrics();
     resetBFSMetrics();
     resetDFSMetrics();
+    resetRLMetrics();
     hideAStarMetrics();
     hideMDPMetrics();
     hideBFSMetrics();
     hideDFSMetrics();
+    hideRLMetrics();
 
     GRID = []; PATH = []; START_POS = null; GOAL_POS = null;
     explorationSteps = []; explorationScores = []; scoreMap = {};
@@ -457,7 +482,7 @@ async function generateMaze() {
 // ---------------- Shared solver/animation helper ----------------
 async function solveAndAnimateSolver({
     apiEndpoint,
-    solverName,       // "DFS", "BFS", "AStar", "MDP"
+    solverName,       // "DFS", "BFS", "AStar", "MDP", "RL"
     showMetricsFn,    // function to show solver-specific metrics panel
     hideMetricsFns = [], // array of functions to hide other panels
     pathColor = "blue",
@@ -475,7 +500,7 @@ async function solveAndAnimateSolver({
     hideMetricsFns.forEach(fn => fn());
     showMetricsFn();
 
-    const hoverEl = el(hoverElId);
+    const hoverEl = hoverElId ? el(hoverElId) : null;
     if (hoverEl) hoverEl.innerText = `Hover a cell to inspect ${solverName} exploration.`;
 
     animId++;
@@ -503,7 +528,9 @@ async function solveAndAnimateSolver({
 
     PATH = path;
     explorationSteps = steps.map(s => Array.isArray(s[0]) ? [s[0][0], s[0][1]] : [s[0], s[1]]);
-    explorationScores = processScoresFn ? processScoresFn(steps, scores) : steps.map((s, i) => ({ pos: [s[0], s[1]], depth: s[2] || 0 }));
+    explorationScores = processScoresFn
+        ? processScoresFn(steps, scores)
+        : steps.map((s) => ({ pos: [s[0], s[1]], depth: s[2] || 0 }));
 
     buildScoreMap();
 
@@ -598,6 +625,37 @@ async function solveAndAnimateSolver({
                 ? metrics["Path Optimality Ratio"].toFixed(2)
                 : metrics["Path Optimality Ratio"] ?? 0;
     }
+    else if (solverName === "RL") {
+        el("rlPathLength").innerText = metrics["Path Length"] ?? 0;
+        el("rlNumTurns").innerText = metrics["Number of Turns"] ?? 0;
+        el("rlTotalReward").innerText =
+            typeof metrics["Total Reward Collected"] === "number"
+                ? metrics["Total Reward Collected"].toFixed(2)
+                : 0;
+        el("rlAvgCost").innerText =
+            typeof metrics["Average Step Cost"] === "number"
+                ? metrics["Average Step Cost"].toFixed(3)
+                : 0;
+
+        el("rlEpisodes").innerText = metrics["Episodes Trained"] ?? 0;
+        el("rlAvgEpReward").innerText =
+            typeof metrics["Average Episode Reward"] === "number"
+                ? metrics["Average Episode Reward"].toFixed(2)
+                : 0;
+        el("rlBestEpReward").innerText =
+            typeof metrics["Best Episode Reward"] === "number"
+                ? metrics["Best Episode Reward"].toFixed(2)
+                : 0;
+        el("rlFinalEps").innerText =
+            typeof metrics["Final Exploration Rate"] === "number"
+                ? metrics["Final Exploration Rate"].toFixed(2)
+                : 0;
+
+        el("rlManhattan").innerText = metrics["Shortest Manhattan Path"] ?? 0;
+        el("rlOptimality").innerText = metrics["Path Optimality Ratio"] ?? 0;
+
+        el("rlCompTime").innerText = metrics["Computation Time"] ?? 0;
+    }
 
     drawMaze(GRID);
 
@@ -617,7 +675,7 @@ async function solveAndAnimateSolver({
             } else if (solverName === "DFS" || solverName === "MDP") {
                 return s.depth ?? 0;
             }
-            return 0; // fallback default
+            return 0; // fallback default (RL: no exploration heatmap)
         });
 
         const minVal = Math.min(...values);
@@ -650,7 +708,8 @@ async function solveAndAnimateSolver({
 
     if (PATH.length) await animatePath(PATH, pathColor, 30, localId);
 
-    if (solverName === "AStar" && initialHeatmapMode) {
+    // NOTE: initialHeatmapMode is left as-is if you had it globally elsewhere
+    if (solverName === "AStar" && typeof initialHeatmapMode !== "undefined" && initialHeatmapMode) {
         renderAStarHeatmap(initialHeatmapMode);
     }
 
@@ -663,7 +722,7 @@ function solveAndAnimateDFS() {
         apiEndpoint: "/api/maze/solveWithDFS",
         solverName: "DFS",
         showMetricsFn: showDFSMetrics,
-        hideMetricsFns: [hideAStarMetrics, hideBFSMetrics, hideMDPMetrics],
+        hideMetricsFns: [hideAStarMetrics, hideBFSMetrics, hideMDPMetrics, hideRLMetrics],
         pathColor: "blue",
         heatStartColor: [0, 255, 255],
         heatEndColor: [255, 153, 0],
@@ -681,7 +740,7 @@ function solveAndAnimateBFS() {
         apiEndpoint: "/api/maze/solveWithBFS",
         solverName: "BFS",
         showMetricsFn: showBFSMetrics,
-        hideMetricsFns: [hideAStarMetrics, hideDFSMetrics, hideMDPMetrics],
+        hideMetricsFns: [hideAStarMetrics, hideDFSMetrics, hideMDPMetrics, hideRLMetrics],
         pathColor: "blue",
         heatStartColor: [135, 206, 250],
         heatEndColor: [255, 165, 0],
@@ -695,7 +754,7 @@ function solveAndAnimateAStar() {
         apiEndpoint: "/api/maze/solveWithAStar",
         solverName: "AStar",
         showMetricsFn: showAStarMetrics,
-        hideMetricsFns: [hideBFSMetrics, hideDFSMetrics, hideMDPMetrics],
+        hideMetricsFns: [hideBFSMetrics, hideDFSMetrics, hideMDPMetrics, hideRLMetrics],
         pathColor: "blue",
         // Use cyan -> light-red to match the legend preview for f-values
         heatStartColor: [43, 131, 186], // #2b83ba
@@ -720,7 +779,7 @@ function solveAndAnimateMDP() {
         apiEndpoint: "/api/maze/solveWithMDP",
         solverName: "MDP",
         showMetricsFn: showMDPMetrics,
-        hideMetricsFns: [hideAStarMetrics, hideBFSMetrics, hideDFSMetrics],
+        hideMetricsFns: [hideAStarMetrics, hideBFSMetrics, hideDFSMetrics, hideRLMetrics],
         pathColor: "blue",
         heatStartColor: [255, 255, 0],
         heatEndColor: [0, 0, 255],
@@ -728,14 +787,29 @@ function solveAndAnimateMDP() {
     });
 }
 
+function solveAndAnimateRL() {
+    return solveAndAnimateSolver({
+        apiEndpoint: "/api/maze/solveWithRL",
+        solverName: "RL",
+        showMetricsFn: showRLMetrics,
+        hideMetricsFns: [hideAStarMetrics, hideBFSMetrics, hideDFSMetrics, hideMDPMetrics],
+        pathColor: "blue",
+        heatStartColor: [0, 255, 255],
+        heatEndColor: [255, 153, 0],
+        hoverElId: "rlHoverInfo",
+        processScoresFn: () => [] // RL: no exploration heatmap
+    });
+}
+
 // ====================== INIT / BOOT ======================
-    (function init() {
-        hideAStarMetrics();
-        hideMDPMetrics();
-        hideBFSMetrics();
-        hideDFSMetrics();
-        updateHeatPreview();
-    })();
+(function init() {
+    hideAStarMetrics();
+    hideMDPMetrics();
+    hideBFSMetrics();
+    hideDFSMetrics();
+    hideRLMetrics();
+    updateHeatPreview();
+})();
 
 // ====================== EXPORTS / EVENT HOOKS ======================
 window.generateMaze = generateMaze;
@@ -743,3 +817,4 @@ window.solveAndAnimateAStar = solveAndAnimateAStar;
 window.solveAndAnimateMDP = solveAndAnimateMDP;
 window.solveAndAnimateBFS = solveAndAnimateBFS;
 window.solveAndAnimateDFS = solveAndAnimateDFS;
+window.solveAndAnimateRL = solveAndAnimateRL;
