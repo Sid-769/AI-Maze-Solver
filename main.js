@@ -16,6 +16,34 @@ let explorationSteps = [];    // steps (for A* exploration timeline)
 let explorationScores = [];   // scores (for heatmap: f,g,h)
 let scoreMap = {};            // quick lookup { "r,c": {f,g,h} }
 let lastHoverCell = null;
+// Stored RL episode paths (populated after running RL)
+let RL_EPISODE_PATHS = {
+    "1": [],
+    "1499": [],
+    "2999": [],
+    "greedy": []
+};
+
+// Normalize a path to an array of [r, c] numeric pairs
+function normalizePath(p) {
+    if (!p || !Array.isArray(p)) return [];
+    const out = [];
+    for (const item of p) {
+        if (!item) continue;
+        // item might already be [r,c]
+        if (Array.isArray(item) && item.length >= 2) {
+            const r = Number(item[0]);
+            const c = Number(item[1]);
+            if (!Number.isNaN(r) && !Number.isNaN(c)) out.push([r, c]);
+            continue;
+        }
+        // fallback: try to extract numeric properties
+        const r = Number(item.r ?? item[0]);
+        const c = Number(item.c ?? item[1]);
+        if (!Number.isNaN(r) && !Number.isNaN(c)) out.push([r, c]);
+    }
+    return out;
+}
 
 // ====================== CONSTANTS / UTILITIES ======================
 const MAX_CANVAS_PIXELS = 1000;
@@ -338,6 +366,36 @@ async function animatePath(path, color = "yellow", delay = 30, localAnimId = 0) 
     isAnimating = false;
 }
 
+// Loader helpers
+function showLoader(text = "Loading...") {
+    const o = document.getElementById('loadingOverlay');
+    const t = document.getElementById('loaderText');
+    if (t) t.innerText = text;
+    if (o) o.classList.remove('hidden');
+}
+
+function hideLoader() {
+    const o = document.getElementById('loadingOverlay');
+    if (o) o.classList.add('hidden');
+}
+
+// Draw a path immediately (no animation) — used to show greedy path by default
+function drawPathStatic(path, color = "yellow") {
+    if (!GRID.length || !path || !path.length) return;
+    drawMaze(GRID);
+    const rows = GRID.length;
+    const cols = GRID[0].length;
+    const cellSize = computeCellSize(rows, cols);
+    const margin = Math.max(1, Math.floor(cellSize * 0.2));
+    const size = Math.max(1, cellSize - 2 * margin);
+    for (const [r, c] of path) {
+        if ((START_POS && r === START_POS[0] && c === START_POS[1]) ||
+            (GOAL_POS && r === GOAL_POS[0] && c === GOAL_POS[1])) continue;
+        ctx.fillStyle = color;
+        ctx.fillRect(c * cellSize + margin, r * cellSize + margin, size, size);
+    }
+}
+
 // ====================== SCORE MAP (A* hover) ======================
 function buildScoreMap() {
     scoreMap = {};
@@ -469,6 +527,12 @@ async function generateMaze() {
         START_POS = data.start;
         GOAL_POS = data.goal;
 
+        // expose for console debugging
+        window.GRID = GRID;
+        window.START_POS = START_POS;
+        window.GOAL_POS = GOAL_POS;
+        console.debug('generateMaze: exported GRID/START/GOAL to window', {rows: GRID && GRID.length, start: START_POS, goal: GOAL_POS});
+
         // reset heatmap radio to default (f)
         const r = document.querySelector("input[name=heatmap][value=f]");
         if (r) { r.checked = true; heatmapMode = 'f'; }
@@ -514,9 +578,11 @@ async function solveAndAnimateSolver({
     const startTime = performance.now();
     let data;
     try {
+        if (solverName === "RL") showLoader('Training RL...');
         data = await apiFetchJson(apiEndpoint);
     } catch (err) {
         alert(`${solverName} call failed: ${err.message}`);
+        if (solverName === "RL") hideLoader();
         return;
     }
     const endTime = performance.now();
@@ -526,6 +592,18 @@ async function solveAndAnimateSolver({
     const scores = data.scores || [];
     const metrics = data.metrics || {};
 
+    // If the server returned a fresh grid/start/goal (RL endpoint does), adopt it
+    if (data.grid && Array.isArray(data.grid) && data.start && data.goal) {
+        GRID = data.grid;
+        START_POS = data.start;
+        GOAL_POS = data.goal;
+        // reflect into window for developer console access
+        window.GRID = GRID;
+        window.START_POS = START_POS;
+        window.GOAL_POS = GOAL_POS;
+        console.debug('solveAndAnimateSolver: adopted server grid and exported to window', {rows: GRID && GRID.length, start: START_POS, goal: GOAL_POS, solver: solverName});
+    }
+
     PATH = path;
     explorationSteps = steps.map(s => Array.isArray(s[0]) ? [s[0][0], s[0][1]] : [s[0], s[1]]);
     explorationScores = processScoresFn
@@ -533,6 +611,42 @@ async function solveAndAnimateSolver({
         : steps.map((s) => ({ pos: [s[0], s[1]], depth: s[2] || 0 }));
 
     buildScoreMap();
+
+    // If RL, capture recorded episodes and final greedy path for playback
+    if (solverName === "RL") {
+        if (data.episodes) {
+            RL_EPISODE_PATHS["1"] = normalizePath(data.episodes["1"] || []);
+            RL_EPISODE_PATHS["1499"] = normalizePath(data.episodes["1499"] || []);
+            RL_EPISODE_PATHS["2999"] = normalizePath(data.episodes["2999"] || []);
+        } else {
+            RL_EPISODE_PATHS["1"] = [];
+            RL_EPISODE_PATHS["1499"] = [];
+            RL_EPISODE_PATHS["2999"] = [];
+        }
+        RL_EPISODE_PATHS["greedy"] = normalizePath(path || []);
+        // also expose RL episode paths to window for debugging/console
+        window.RL_EPISODE_PATHS = RL_EPISODE_PATHS;
+        console.debug('solveAndAnimateSolver: stored RL_EPISODE_PATHS on window', {
+            one: RL_EPISODE_PATHS['1'] && RL_EPISODE_PATHS['1'].length,
+            mid: RL_EPISODE_PATHS['1499'] && RL_EPISODE_PATHS['1499'].length,
+            three: RL_EPISODE_PATHS['2999'] && RL_EPISODE_PATHS['2999'].length,
+            greedy: RL_EPISODE_PATHS['greedy'] && RL_EPISODE_PATHS['greedy'].length
+        });
+
+        // Animate the final greedy path automatically (fast)
+        try {
+            if (RL_EPISODE_PATHS['greedy'] && RL_EPISODE_PATHS['greedy'].length) {
+                showLoader('Rendering greedy path...');
+                await animatePath(RL_EPISODE_PATHS['greedy'], 'blue', 10, localId);
+                hideLoader();
+            } else {
+                if (solverName === 'RL') hideLoader();
+            }
+        } catch (e) {
+            console.warn('Failed to animate greedy path', e);
+            hideLoader();
+        }
+    }
 
     // Shared metrics
     el("nodesVisited").innerText = steps.length;
@@ -706,7 +820,9 @@ async function solveAndAnimateSolver({
         }
     }
 
-    if (PATH.length) await animatePath(PATH, pathColor, 30, localId);
+    if (solverName !== "RL") {
+        if (PATH.length) await animatePath(PATH, pathColor, 30, localId);
+    }
 
     // NOTE: initialHeatmapMode is left as-is if you had it globally elsewhere
     if (solverName === "AStar" && typeof initialHeatmapMode !== "undefined" && initialHeatmapMode) {
@@ -809,6 +925,79 @@ function solveAndAnimateRL() {
     hideDFSMetrics();
     hideRLMetrics();
     updateHeatPreview();
+
+    // RL episode playback buttons
+    const btnEp1    = document.getElementById("btnRLEp1");
+    const btnEp1499 = document.getElementById("btnRLEp1499");
+    const btnEp2999 = document.getElementById("btnRLEp2999");
+    const btnGreedy = document.getElementById("btnRLGreedy");
+
+    async function playRLPath(which, color) {
+        const rawPath = RL_EPISODE_PATHS[which];
+        const path = normalizePath(rawPath);
+        if (!GRID.length || !path || !path.length) {
+            console.warn("No RL path available for", which);
+            return;
+        }
+        animId++;
+        const localId = animId;
+        drawMaze(GRID);
+        // choose playback speed per episode but allow manual override by slider
+        const delayMap = {"1": 3, "1499": 16, "2999": 16, "greedy": 30};
+        // slider override
+        const slider = document.getElementById('rlSpeedSlider');
+        const sliderVal = slider ? Number(slider.value) : null;
+        const delay = (sliderVal && !Number.isNaN(sliderVal)) ? sliderVal : (delayMap[which] ?? 20);
+
+        // Optionally draw revisit heatmap overlay (static) if enabled
+        const showHeat = document.getElementById('rlHeatmapToggle') && document.getElementById('rlHeatmapToggle').checked;
+        if (showHeat) drawRevisitHeatmap(path);
+
+        try {
+            showLoader('Playing ' + which + '...');
+            await animatePath(path, color, delay, localId);
+        } finally {
+            hideLoader();
+        }
+    }
+
+// Draw a revisit-count heatmap for a path (more visits → stronger color)
+function drawRevisitHeatmap(path) {
+    if (!GRID.length || !path || !path.length) return;
+    // compute counts
+    const counts = {};
+    let maxCount = 0;
+    for (const [r, c] of path) {
+        const key = toKey(r, c);
+        counts[key] = (counts[key] || 0) + 1;
+        if (counts[key] > maxCount) maxCount = counts[key];
+    }
+
+    // draw semi-transparent overlay
+    const rows = GRID.length;
+    const cols = GRID[0].length;
+    const cellSize = computeCellSize(rows, cols);
+    const margin = Math.max(1, Math.floor(cellSize * 0.2));
+    const size = Math.max(1, cellSize - 2 * margin);
+
+    for (let r = 0; r < rows; r++) {
+        for (let c = 0; c < cols; c++) {
+            const key = toKey(r, c);
+            const v = counts[key] || 0;
+            if (!v) continue;
+            const t = v / (maxCount || 1); // 0..1
+            // use orange-red gradient for revisit intensity
+            const color = `rgba(${Math.round(255 * t)}, ${Math.round(120 * (1 - t))}, 40, ${0.25 + 0.5 * t})`;
+            ctx.fillStyle = color;
+            ctx.fillRect(c * cellSize + margin, r * cellSize + margin, size, size);
+        }
+    }
+}
+
+    if (btnEp1)    btnEp1.addEventListener("click", () => playRLPath("1", "orange"));
+    if (btnEp1499) btnEp1499.addEventListener("click", () => playRLPath("1499", "magenta"));
+    if (btnEp2999) btnEp2999.addEventListener("click", () => playRLPath("2999", "cyan"));
+    if (btnGreedy) btnGreedy.addEventListener("click", () => playRLPath("greedy", "blue"));
 })();
 
 // ====================== EXPORTS / EVENT HOOKS ======================
@@ -818,3 +1007,10 @@ window.solveAndAnimateMDP = solveAndAnimateMDP;
 window.solveAndAnimateBFS = solveAndAnimateBFS;
 window.solveAndAnimateDFS = solveAndAnimateDFS;
 window.solveAndAnimateRL = solveAndAnimateRL;
+
+// Expose internals to window for easy console debugging (kept in sync elsewhere)
+window.RL_EPISODE_PATHS = RL_EPISODE_PATHS;
+window.GRID = GRID;
+window.PATH = PATH;
+window.START_POS = START_POS;
+window.GOAL_POS = GOAL_POS;
