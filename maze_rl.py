@@ -89,6 +89,18 @@ class MazeRL:
         else:
             reward = self.step_cost
         return (new_row, new_col), reward
+
+    """
+    Selects an action for the agent using an ε-greedy policy.
+
+    If a random value is less than the exploration rate ε, the agent explores
+    by selecting a random action. Otherwise, it exploits by choosing the action
+    with the highest Q-value in the current state.
+
+    Returns:
+    action_index (int): index of the chosen action in the Q-table
+    action (str): the corresponding action label ("U", "D", "L", "R")
+    """
     
     def choose_action(self, state, exploration_rate):
 
@@ -111,6 +123,25 @@ class MazeRL:
         # action_index is the index into your Q-table’s 3rd dimension.
         # action returns a str ("U", "D", "L", "R")
         return action_index, action
+
+    """
+    Updates the Q-value for a given state–action pair using the
+    Q-Learning update rule.
+
+    Computes the temporal-difference (TD) target:
+        TD Target = reward + γ * max_a' Q(next_state, a')
+
+    Then adjusts the current Q-value toward this target using the
+    learning rate α:
+
+        Q(s, a) ← Q(s, a) + α * (TD Target − Q(s, a))
+
+    Args:
+        state (tuple): current (row, col) state
+        action_index (int): index of the action taken in the Q-table
+        reward (float): immediate reward received after the action
+        next_state (tuple): resulting state after taking the action
+    """
 
     def update_Q(self, state, action_index, reward, next_state):
 
@@ -136,7 +167,33 @@ class MazeRL:
         self.QTable[row, col, action_index] += self.learning_rate * td_error
     
     
-    # run_episode(exploration_rate=??, record_episode=??)
+    """
+    Runs a single Q-Learning training episode.
+
+    Starting from the maze’s start state, the agent repeatedly:
+        - selects an action using ε-greedy exploration
+        - transitions to the next state and receives a reward
+        - updates its Q-table using the Q-Learning update rule
+
+    If `record_episode` is True, the function logs each step and
+    records the full path taken during the episode. Otherwise,
+    it trains silently and returns empty lists for path/log.
+
+    The episode terminates when:
+        - the agent reaches the goal, or
+        - the maximum number of steps is exceeded, or
+        - the agent becomes stuck (attempts invalid moves repeatedly)
+
+    Args:
+        max_steps (int): maximum steps allowed in a single episode
+        exploration_rate (float): ε value controlling randomness in action selection
+        record_episode (bool): whether to store the path and step-by-step log
+
+    Returns:
+        path (list): sequence of visited states (if recorded, else empty)
+        log (list): per-step info dictionaries (if recorded, else empty)
+        total_reward (float): cumulative reward collected during the episode
+    """
     def run_episode(self, max_steps=1000, exploration_rate=0.2, record_episode=False):
         # If record_episode is false, it'll return empty lists
         path = [self.start] if record_episode else []
@@ -172,12 +229,41 @@ class MazeRL:
             # Stop if the agent is stuck in the same state
             # Do this after the update_Q and update reward so agent can learn bumping into walls is bad.
             if next_state == state:
-                continue # !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+                continue
             
             state = next_state
 
         return path, log, total_reward
-    
+
+
+    """
+    Trains the Q-learning agent over multiple episodes.
+
+    For each episode, the agent:
+        - runs `run_episode()` with the current exploration rate ε
+        - collects the total reward
+        - optionally records the full path and step-by-step log for episodes
+        listed in `record_episodes`
+        - decays ε toward `min_exploration_rate` using the specified decay factor
+
+    This function does NOT return a final policy; it only trains the Q-table
+    and gathers training statistics that can be displayed or graphed.
+
+    Args:
+        num_episodes (int): number of training episodes to run
+        max_steps (int): maximum steps allowed inside each episode
+        exploration_rate (float): initial ε value (probability of random actions)
+        exploration_rate_decay (float): multiplicative decay applied after each episode
+        min_exploration_rate (float): lower bound on ε
+        record_episodes (list[int] or None): episodes whose trajectories should be stored
+
+    Returns:
+        dict: {
+            "rewards": list of total rewards from each episode,
+            "recorded_episodes": { episode_number: { path, log, total_reward }, ... },
+            "final_exploration_rate": final ε after decay
+        }
+    """    
     def train(self, num_episodes, max_steps=1000, exploration_rate=0.3, exploration_rate_decay=0.995, min_exploration_rate=0.01, record_episodes=None):
 
         if record_episodes is None:
@@ -212,7 +298,23 @@ class MazeRL:
             "recorded_episodes": recorded_data,
             "final_exploration_rate": epsilon
         }
+        
+    
+     """
+    Selects the best action for the given state according to the
+    current Q-table (pure exploitation).
 
+    This function does NOT use ε-greedy exploration. It simply chooses the
+    action with the highest Q-value, which is why it is used after training
+    to extract the final greedy policy.
+
+    Args:
+        state (tuple): (row, col) position in the maze
+
+    Returns:
+        action_index (int): index of the best action in the Q-table
+        action (str): action label ("U", "D", "L", "R")
+    """
     def greedy_action(self, state):
 
         row, col = state  # unpack the state
@@ -225,7 +327,27 @@ class MazeRL:
         # action_index is the index into your Q-table’s 3rd dimension.
         # action returns a str ("U", "D", "L", "R")
         return action_index, action
-    
+
+    """
+    Generates a greedy path from the start to the goal using the
+    agent’s learned Q-table.
+
+    At each step, the agent selects the action with the highest
+    Q-value (pure exploitation, no exploration). This produces
+    the final deterministic policy that represents what the agent
+    has learned after training.
+
+    The function also logs each transition and accumulates the
+    total reward collected along this greedy trajectory.
+
+    Args:
+        max_steps (int): safety limit to prevent infinite loops
+
+    Returns:
+        path (list): ordered list of visited states from start → goal
+        log (list): per-step dictionaries containing state, action, reward, etc.
+        total_reward (float): cumulative reward earned along this greedy path
+    """
     def greedy_path(self, max_steps=1000):
         path = [self.start]
         log = []
@@ -262,7 +384,21 @@ class MazeRL:
         return path, log, total_reward
     
     def _manhattan_distance(self, start, goal):
-        return abs(start[0]-goal[0]) + abs(start[1]-goal[1])    
+        return abs(start[0]-goal[0]) + abs(start[1]-goal[1])   
+
+    """
+    Counts the number of direction changes (turns) in a path.
+
+    A turn occurs whenever the movement direction between two consecutive
+    steps differs from the movement direction of the previous step.
+    Straight-line movement does not increase the turn count.
+
+    Args:
+        path (list of tuples): sequence of (row, col) states
+
+    Returns:
+        int: number of direction changes in the path
+    """ 
     
     def _count_turns(self, path):
         if len(path) < 3:
@@ -275,6 +411,36 @@ class MazeRL:
                 turns += 1
         return turns 
 
+    """
+    Runs the complete Reinforcement Learning (Q-Learning) pipeline:
+    training + extracting the final greedy path + computing metrics.
+
+    This function:
+        1. Trains the agent for a specified number of episodes
+        using the `train()` method.
+        2. Extracts the final greedy policy using `greedy_path()`.
+        3. Computes summary metrics describing:
+            - path quality (length, turns, optimality ratio)
+            - reward statistics from training
+            - exploration rate decay
+            - total computation time
+        4. Returns the final path, metrics dictionary, and
+        training summary for visualization in the frontend.
+
+    Args:
+        num_episodes (int): number of training episodes to run
+        max_steps (int): max steps allowed inside each episode
+        exploration_rate (float): initial ε for ε-greedy exploration
+        exploration_rate_decay (float): multiplicative decay for ε
+        min_exploration_rate (float): lower limit for ε during training
+        record_episodes (list[int] or None): episodes to store detailed logs for
+
+    Returns:
+        tuple:
+            path (list): the greedy path extracted after training
+            metrics (dict): summary statistics for the RL solution
+            training_summary (dict): rewards, recorded episodes, final ε
+    """
     def rl_solver(self, num_episodes=3000, max_steps=3000, exploration_rate=0.3, exploration_rate_decay=0.995, min_exploration_rate=0.05, record_episodes=None):
         
 
