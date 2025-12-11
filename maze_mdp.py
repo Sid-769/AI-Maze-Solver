@@ -24,12 +24,41 @@ class MazeMDP:
         self.p_slip = 0.1
 
     # ------------------------- Utility functions -------------------------
+    """
+    Extracts all valid (non-wall) states in the maze.
+
+    A state is considered valid if the cell is not a wall (grid value ≠ 1).
+    Returns a list of all (row, col) coordinates that the agent can occupy.
+
+    Returns:
+        list[tuple]: all valid (row, col) state positions in the maze.
+    """
     def _extract_states(self):
         return [(r, c) for r in range(self.num_rows) for c in range(self.num_cols) if self.grid[r][c] != 1]
 
     def is_valid(self, row, col):
         return 0 <= row < self.num_rows and 0 <= col < self.num_cols and self.grid[row][col] != 1
 
+
+    """
+    Performs a stochastic-free state transition for the MDP.
+
+    Given a state and an intended action, this function attempts to move the
+    agent in the specified direction. If the move leads into a wall or outside
+    the grid, the agent stays in the same state.
+
+    Rewards:
+        - Goal cell → +goal_reward
+        - Any other valid move → step_cost
+
+    Args:
+        state (tuple): current (row, col) position
+        action (str): one of {"U", "D", "L", "R"}
+
+    Returns:
+        next_state (tuple): resulting (row, col) after attempting the action
+        reward (float): immediate reward for entering the next state
+    """
     def transition(self, state, action):
         if state == self.goal:
             return state, self.goal_reward
@@ -40,6 +69,28 @@ class MazeMDP:
         reward = self.goal_reward if (new_row, new_col) == self.goal else self.step_cost
         return (new_row, new_col), reward
 
+    """
+    Returns the stochastic outcomes of taking an action in the maze.
+
+    In this MDP, actions are noisy:
+        - With probability p_success of 0.8, ie. the intended action.
+        - With probability p_slip of 0.1, ie. the agent slips to the action on the left.
+        - With probability p_slip of 0.1, ie. the agent slips to the action on the right.
+
+    This function enumerates the possible outcomes, applies the transition
+    model for each action, and returns the resulting next states and rewards.
+
+    Args:
+        state (tuple): (row, col) current position
+        action (str): intended action ("U", "D", "L", "R")
+
+    Returns:
+        list of tuples:
+            [
+                (probability, next_state, reward),
+                ...
+            ]
+    """
     def get_action_outcomes(self, state, action):
         left_of = {"U": "L", "L": "D", "D": "R", "R": "U"}
         right_of = {"U": "R", "R": "D", "D": "L", "L": "U"}
@@ -49,6 +100,29 @@ class MazeMDP:
             outcomes.append((prob, next_state, reward))
         return outcomes
 
+    """
+    Performs Value Iteration to compute the optimal value function for the MDP.
+
+    Value Iteration repeatedly applies the Bellman optimality update:
+
+        V(s) ← max_a Σ_{s'} P(s'|s,a) · [ R(s,a,s') + γ · V(s') ]
+
+    The loop continues until either:
+        - the maximum update change (delta) falls below the tolerance `tol`, or
+        - the maximum number of iterations is reached.
+
+    Once state values converge, the function extracts the optimal deterministic
+    policy by choosing, for each state, the action that maximizes the expected
+    return.
+
+    Args:
+        max_iters (int): maximum number of value-iteration sweeps
+        tol (float): convergence tolerance for stopping
+
+    Returns:
+        V (dict): mapping from state → estimated optimal value
+        policy (dict): mapping from state → optimal action ("U","D","L","R")
+    """
     # ------------------------- MDP solver -------------------------
     def value_iteration(self, max_iters=1000, tol=1e-6):
         V = {s: 0 for s in self.states}
@@ -71,7 +145,23 @@ class MazeMDP:
                 break
         policy = self.extract_policy(V)
         return V, policy
+    """
+    Derives the optimal deterministic policy from a given value function.
 
+    For each state, this function evaluates all possible actions and selects
+    the one that maximizes the expected return:
+
+        π*(s) = argmax_a Σ_{s'} P(s'|s,a) · [ R(s,a,s') + γ · V(s') ]
+
+    The goal state has no actions, so it is assigned `None`.
+
+    Args:
+        V (dict): mapping of state → value, produced by value_iteration()
+
+    Returns:
+        dict: optimal policy mapping state → best action ("U", "D", "L", "R"),
+            or None for the goal state
+    """
     def extract_policy(self, V):
         policy = {}
         for s in self.states:
@@ -86,7 +176,36 @@ class MazeMDP:
                     best_val, best_action = expected_value, a
             policy[s] = best_action
         return policy
+    """
+    Executes a (stochastic) policy in the maze environment and returns
+    the resulting path along with slip and failure statistics.
 
+    At each step, the agent attempts to follow the policy action, but due to
+    environment stochasticity:
+
+        - With probability p_success, the intended action is taken.
+        - With probability p_slip, the agent slips left.
+        - With probability p_slip, the agent slips right.
+
+    If a chosen action results in hitting a wall (i.e., staying in place),
+    the agent increments `failed_moves` and may optionally try to move to a
+    random valid neighboring state.
+
+    The process stops when:
+        - the goal is reached,
+        - the policy assigns None (for terminal states),
+        - or the max_steps limit is reached.
+
+    Args:
+        policy (dict): mapping from state → action as produced by extract_policy()
+        max_steps (int): safety limit to avoid infinite loops
+
+    Returns:
+        tuple:
+            path (list): sequence of visited states while following the policy
+            slips (int): number of sideways slips caused by stochastic transitions
+            failed_moves (int): number of times the agent attempted an invalid move
+    """
     def follow_policy(self, policy, max_steps=10000):
         path = [self.start]
         current_state = self.start
